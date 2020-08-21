@@ -19,7 +19,6 @@ class ScheduleExecutionMonitor(TimetableMonitorBase):
         super().__init__(timetable=timetable, **kwargs)
         self.robot_id = robot_id
         self.timetable = timetable
-        self.timetable.fetch()
         self.scheduler = scheduler
         self.recovery_method = delay_recovery
         self.d_graph_watchdog = kwargs.get("d_graph_watchdog", False)
@@ -80,7 +79,7 @@ class ScheduleExecutionMonitor(TimetableMonitorBase):
             else:
                 self.preempt(task)
 
-    def _update_timepoint(self, task, timetable, r_assigned_time, node_id, task_progress):
+    def _update_timepoint(self, task, timetable, r_assigned_time, node_id, task_progress, store=False):
         is_consistent = True
         try:
             self.timetable.assign_timepoint(r_assigned_time, node_id)
@@ -91,7 +90,7 @@ class ScheduleExecutionMonitor(TimetableMonitorBase):
             is_consistent = False
 
         self.timetable.stn.execute_timepoint(node_id)
-        self._update_edges(task, timetable)
+        self._update_edges(task, timetable, store)
 
         if not self.d_graph_watchdog:
             self.recover(task, task_progress, r_assigned_time, is_consistent)
@@ -115,14 +114,14 @@ class ScheduleExecutionMonitor(TimetableMonitorBase):
 
     def re_allocate(self, task):
         self.logger.info("Trigger re-allocation of task %s", task.task_id)
-        task.update_status(TaskStatusConst.UNALLOCATED)
+        # task.update_status(TaskStatusConst.UNALLOCATED)
         self.timetable.remove_task(task.task_id)
         task_status = TaskStatus(task.task_id, self.robot_id, TaskStatusConst.UNALLOCATED)
         self.send_task_status(task_status)
 
     def preempt(self, task):
         self.logger.info("Trigger preemption of task %s", task.task_id)
-        task.update_status(TaskStatusConst.PREEMPTED)
+        # task.update_status(TaskStatusConst.PREEMPTED)
         self.timetable.remove_task(task.task_id)
         task_status = TaskStatus(task.task_id, self.robot_id, TaskStatusConst.PREEMPTED)
         self.send_task_status(task_status)

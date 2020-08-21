@@ -5,6 +5,7 @@ from datetime import timedelta
 from fmlib.models.actions import GoTo
 from mrs.simulation.simulator import SimulatorInterface
 from ropod.structs.task import TaskStatus as TaskStatusConst
+from fmlib.models.tasks import TransportationTask as Task
 
 
 class Dispatcher(SimulatorInterface):
@@ -100,7 +101,8 @@ class Dispatcher(SimulatorInterface):
     def dispatch_tasks(self):
         for robot_id in self.robot_ids:
             timetable = self.timetable_manager.get_timetable(robot_id)
-            task = timetable.get_earliest_task()
+            task_id = timetable.get_earliest_task_id()
+            task = Task.get_task(task_id) if task_id else None
             if task and task.status.status == TaskStatusConst.ALLOCATED:
                 start_time = timetable.get_start_time(task.task_id)
                 if self.is_schedulable(start_time):

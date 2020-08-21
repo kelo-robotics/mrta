@@ -41,7 +41,7 @@ class TaskAnnouncement(AsDictMixin):
         attrs = super().to_attrs(dict_repr)
         tasks = list()
         for task_id, task_dict in attrs.get("tasks").items():
-            tasks.append(Task.from_payload(task_dict, constraints=TaskConstraints, request=TransportationRequest))
+            tasks.append(Task.from_payload(task_dict, save=False, constraints=TaskConstraints, request=TransportationRequest))
         attrs.update(tasks=tasks)
         return attrs
 

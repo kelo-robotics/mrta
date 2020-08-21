@@ -20,31 +20,46 @@ _component_modules = {'simulator': Simulator,
 
 
 class RobotProxy:
-    def __init__(self, robot_id, api, robot_proxy_store, bidder, timetable_monitor, **kwargs):
+    def __init__(self, robot_id, api, bidder, timetable_monitor, **kwargs):
         self.logger = logging.getLogger('mrs.robot.proxy%s' % robot_id)
 
         self.robot_id = robot_id
         self.api = api
-        self.robot_proxy_store = robot_proxy_store
         self.bidder = bidder
         self.timetable_monitor = timetable_monitor
-        self.robot_model = RobotModel.create_new(robot_id)
+
+        self.robot_model = RobotModel.create_new(robot_id, save=False)
+        self.tasks = dict()
+        self.tasks_status = dict()
+        self.requests = dict()
 
         self.api.register_callbacks(self)
         self.logger.info("Initialized RobotProxy %s", robot_id)
+
+    def configure(self, **kwargs):
+        self.logger.debug("Configuring robot proxy")
+        for component_name, component in self.__dict__.items():
+            if hasattr(component, 'configure'):
+                self.logger.debug("Configuring: %s", component_name)
+                component.configure(robot=self.robot_model,
+                                    tasks=self.tasks,
+                                    tasks_status=self.tasks_status,
+                                    **kwargs)
 
     def robot_pose_cb(self, msg):
         payload = msg.get("payload")
         if payload.get("robotId") == self.robot_id:
             self.logger.debug("Robot %s received pose", self.robot_id)
-            self.robot_model.update_position(**payload.get("pose"))
+            self.robot_model.update_position(save=False, **payload.get("pose"))
 
     def task_cb(self, msg):
         payload = msg['payload']
-        task = Task.from_payload(payload)
-        if self.robot_id in task.assigned_robots:
+        assigned_robots = payload.get("assignedRobots")
+        if self.robot_id in assigned_robots:
+            task = Task.from_payload(payload, save=False)
+            self.tasks[task.task_id] = task
+            self.tasks_status[task.task_id] = TaskStatusConst.DISPATCHED
             self.logger.debug("Received task %s", task.task_id)
-            task.update_status(TaskStatusConst.DISPATCHED)
 
     def run(self):
         try:
@@ -72,9 +87,6 @@ if __name__ == '__main__':
     config = Configurator(config_params, component_modules=_component_modules)
     components = config.config_robot_proxy(args.robot_id)
 
-    for name, c in components.items():
-        if hasattr(c, 'configure'):
-            c.configure(planner=Planner(**config_params.get("planner")))
-
     robot = RobotProxy(**components, d_graph_watchdog=config_params.get("d_graph_watchdog"))
+    robot.configure(planner=Planner(**config_params.get("planner")))
     robot.run()

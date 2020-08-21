@@ -11,7 +11,6 @@ class Scheduler(object):
     def __init__(self, robot_id, timetable, time_resolution, **kwargs):
         self.robot_id = robot_id
         self.timetable = timetable
-        self.timetable.fetch()
         self.time_resolution = time_resolution
         self.logger = logging.getLogger("mrs.scheduler")
         self.logger.debug("Scheduler initialized %s", self.robot_id)

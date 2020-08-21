@@ -1,9 +1,7 @@
 import copy
 import logging
 
-from fmlib.models.robot import Robot
 from fmlib.models.tasks import InterTimepointConstraint
-from fmlib.models.tasks import TransportationTask as Task
 from pymodm.errors import DoesNotExist
 from ropod.structs.task import TaskStatus as TaskStatusConst
 from stn.exceptions.stp import NoSTPSolution
@@ -38,9 +36,7 @@ class Bidder:
         """
         self.robot_id = robot_id
         self.timetable = timetable
-        self.timetable.fetch()
         self.api = kwargs.get('api')
-        self.robot_store = kwargs.get('robot_store')
 
         self.logger = logging.getLogger('mrs.bidder.%s' % self.robot_id)
 
@@ -59,8 +55,11 @@ class Bidder:
     def task_announcement_cb(self, msg):
         payload = msg['payload']
         task_announcement = TaskAnnouncement.from_payload(payload)
+        self.tasks.update({task.task_id: task for task in task_announcement.tasks})
+        self.tasks_status.update({task.task_id: TaskStatusConst.UNALLOCATED for task in task_announcement.tasks})
+
         self.logger.debug("Received TASK-ANNOUNCEMENT msg round %s with %s tasks", task_announcement.round_id,
-                                                                                   len(task_announcement.tasks))
+                          len(task_announcement.tasks))
         self.logger.debug("Current stn: %s", self.timetable.stn)
         self.logger.debug("Current dispatchable graph: %s", self.timetable.dispatchable_graph)
         self.compute_bids(task_announcement)
@@ -142,14 +141,17 @@ class Bidder:
                                     prev_location, task.request.pickup_location, insertion_point)
                 continue
 
-            new_stn_task = self.timetable.to_stn_task(task, travel_duration, insertion_point, earliest_admissible_time)
+            prev_task_is_frozen = self.previous_task_is_frozen(insertion_point)
+            new_stn_task = self.timetable.to_stn_task(task, travel_duration, insertion_point, earliest_admissible_time,
+                                                      prev_task_is_frozen)
 
             self.timetable.insert_task(new_stn_task, insertion_point)
             allocation_info = AllocationInfo(insertion_point, new_stn_task)
 
             try:
                 # Update previous location and start constraints of next task (if any)
-                next_task = self.timetable.get_task(insertion_point+1)
+                next_task_id = self.timetable.get_task_id(insertion_point+1)
+                next_task = self.tasks.get(next_task_id)
                 prev_version_next_stn_task = self.timetable.get_stn_task(next_task.task_id)
 
                 prev_location = self.get_previous_location(insertion_point+1)
@@ -161,10 +163,12 @@ class Bidder:
                                         prev_location, next_task.request.pickup_location, insertion_point)
                     continue
 
+                prev_task_is_frozen = self.previous_task_is_frozen(insertion_point+1)
                 next_stn_task = self.timetable.update_stn_task(copy.deepcopy(prev_version_next_stn_task),
                                                                travel_duration,
                                                                insertion_point+1,
-                                                               earliest_admissible_time)
+                                                               earliest_admissible_time,
+                                                               prev_task_is_frozen)
                 self.timetable.update_task(next_stn_task)
 
                 allocation_info.update_next_task(next_stn_task, prev_version_next_stn_task)
@@ -196,10 +200,11 @@ class Bidder:
 
     def insert_in(self, insertion_point):
         try:
-            task = self.timetable.get_task(insertion_point)
-            if task.status.status in [TaskStatusConst.DISPATCHED, TaskStatusConst.ONGOING]:
+            task_id = self.timetable.get_task_id(insertion_point)
+            task_status = self.tasks_status.get('task_id')
+            if task_status in [TaskStatusConst.DISPATCHED, TaskStatusConst.ONGOING]:
                 self.logger.debug("Task %s was already dispatched "
-                                  "Not computing bid for this insertion point %s", task.task_id, insertion_point)
+                                  "Not computing bid for this insertion point %s", task_id, insertion_point)
                 return False
             return True
         except TaskNotFound as e:
@@ -210,13 +215,14 @@ class Bidder:
     def get_previous_location(self, insertion_point):
         if insertion_point == 1:
             try:
-                pose = Robot.get_robot(self.robot_id).position
+                pose = self.robot.position
                 previous_location = self.get_robot_location(pose)
             except DoesNotExist:
                 self.logger.warning("No information about robot's location")
                 previous_location = "AMK_D_L-1_C39"
         else:
-            previous_task = self.timetable.get_task(insertion_point - 1)
+            previous_task_id = self.timetable.get_task_id(insertion_point - 1)
+            previous_task = self.tasks.get(previous_task_id)
             previous_location = previous_task.request.delivery_location
 
         self.logger.debug("Previous location: %s ", previous_location)
@@ -246,6 +252,13 @@ class Bidder:
         self.logger.debug("Travel duration: %s", travel_duration)
         return travel_duration
 
+    def previous_task_is_frozen(self, insertion_point):
+        previous_task_id = self.timetable.get_task_id(insertion_point - 1)
+        task_status = self.tasks_status.get(previous_task_id)
+        if task_status in [TaskStatusConst.DISPATCHED, TaskStatusConst.ONGOING]:
+            return True
+        return False
+
     @staticmethod
     def get_smallest_bid(bids):
         """ Get the bid with the smallest cost among all bids.
@@ -256,10 +269,6 @@ class Bidder:
         smallest_bid = None
 
         for bid in bids:
-            # Do not consider bids for tasks that were dispatched after the bid computation
-            task = Task.get_task(bid.task_id)
-            if task.status.status in [TaskStatusConst.DISPATCHED, TaskStatusConst.ONGOING]:
-                continue
 
             if smallest_bid is None or\
                     bid < smallest_bid or\
@@ -284,7 +293,6 @@ class Bidder:
 
         self.timetable.stn = allocation_info.stn
         self.timetable.dispatchable_graph = allocation_info.dispatchable_graph
-        self.timetable.store()
 
         self.logger.debug("Robot %s allocated task %s", self.robot_id, task_id)
         self.logger.debug("STN: \n %s", self.timetable.stn)
@@ -293,9 +301,9 @@ class Bidder:
         tasks = [task for task in self.timetable.get_tasks()]
 
         self.logger.debug("Tasks allocated to robot %s:%s", self.robot_id, tasks)
-        task = Task.get_task(task_id)
-        task.update_status(TaskStatusConst.ALLOCATED)
-        task.assign_robots([self.robot_id])
+        task = self.tasks.get(task_id)
+        task.assign_robots([self.robot_id], save=False)
+        self.tasks_status[task.task_id] = TaskStatusConst.ALLOCATED
 
     def task_contract_cancellation_cb(self, msg):
         payload = msg['payload']

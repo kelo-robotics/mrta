@@ -45,10 +45,10 @@ class TimetableMonitorBase:
         self.logger.debug("Processing task status %s for task %s by %s", task_status.task_status, task_status.task_id,
                           task_status.robot_id)
         try:
-            task = Task.get_task(task_status.task_id)
+            task = self.tasks.get(task_status.task_id)
             if task_status.task_status == TaskStatusConst.ONGOING:
                 self.process_task_status_update(task, task_status, timestamp)
-                task.update_status(task_status.task_status)
+                self.tasks_status[task.task_id] = TaskStatusConst.ALLOCATED
             if task_status.task_status == TaskStatusConst.COMPLETED:
                 self.process_task_status_update(task, task_status, timestamp)
         except DoesNotExist:
@@ -85,18 +85,19 @@ class TimetableMonitorBase:
                          task_progress.action_status.status == ActionStatusConst.COMPLETED):
                     self._update_timepoint(task, timetable, r_assigned_time, node_id, task_progress)
 
-    def _update_timepoint(self, task, timetable, r_assigned_time, node_id, task_progress):
+    def _update_timepoint(self, task, timetable, r_assigned_time, node_id, task_progress, store=True):
         timetable.update_timepoint(r_assigned_time, node_id)
-        self._update_edges(task, timetable)
+        self._update_edges(task, timetable, store)
 
-    def _update_edges(self, task, timetable):
+    def _update_edges(self, task, timetable, store=True):
         nodes = timetable.stn.get_nodes_by_task(task.task_id)
         self._update_edge(timetable, 'start', 'pickup', nodes)
         self._update_edge(timetable, 'pickup', 'delivery', nodes)
 
         self.logger.debug("Updated stn: \n %s ", timetable.stn)
         self.logger.debug("Updated dispatchable graph: \n %s", timetable.dispatchable_graph)
-        timetable.store()
+        if store:
+            timetable.store()
 
     @staticmethod
     def _update_edge(timetable, start_node, finish_node, nodes):
@@ -164,7 +165,7 @@ class TimetableMonitorBase:
             self.logger.warning("Temporal network is inconsistent")
             return False
 
-    def remove_task_from_timetable(self, timetable, task, status, next_task=None):
+    def remove_task_from_timetable(self, timetable, task, status, next_task=None, store=True):
         self.logger.debug("Deleting task %s from timetable ", task.task_id)
 
         if not timetable.has_task(task.task_id):
@@ -176,9 +177,9 @@ class TimetableMonitorBase:
             raise EmptyTimetable
 
         prev_task = timetable.get_previous_task(task)
-        earliest_task = timetable.get_task(position=1)
+        earliest_task_id = timetable.get_task_id(position=1)
 
-        if task.task_id == earliest_task.task_id and next_task:
+        if task.task_id == earliest_task_id and next_task:
             self._remove_first_task(task, next_task, status, timetable)
         else:
             timetable.remove_task(task.task_id)
@@ -186,7 +187,8 @@ class TimetableMonitorBase:
         if prev_task and next_task:
             self.update_pre_task_constraint(prev_task, next_task, timetable)
 
-        timetable.store()
+        if store:
+            timetable.store()
         self.logger.debug("STN robot %s: %s", timetable.robot_id, timetable.stn)
         self.logger.debug("Dispatchable graph robot %s: %s", timetable.robot_id, timetable.dispatchable_graph)
 
@@ -275,14 +277,14 @@ class TimetableMonitor(TimetableMonitorBase):
         self._update_progress(task, task_status.task_progress, timestamp)
         self._update_task_schedule(task, task_status.task_progress, timestamp)
 
-    def _update_timepoint(self, task, timetable, r_assigned_time, node_id, task_progress):
+    def _update_timepoint(self, task, timetable, r_assigned_time, node_id, task_progress, store=True):
         timetable.check_is_task_delayed(task, r_assigned_time, node_id)
         try:
             self.performance_tracker.update_delay(task.task_id, r_assigned_time, node_id, timetable)
             self.performance_tracker.update_earliness(task.task_id, r_assigned_time, node_id, timetable)
         except AttributeError:
             pass
-        super()._update_timepoint(task, timetable, r_assigned_time, node_id, task_progress)
+        super()._update_timepoint(task, timetable, r_assigned_time, node_id, task_progress, store)
 
         try:
             self.performance_tracker.update_timetables(timetable)
@@ -291,7 +293,8 @@ class TimetableMonitor(TimetableMonitorBase):
         self.auctioneer.changed_timetable.append(timetable.robot_id)
 
         if self.d_graph_watchdog:
-            next_task = timetable.get_next_task(task)
+            next_task_id = timetable.get_next_task_id(task)
+            next_task = Task.get_task(next_task_id)
             self._re_compute_dispatchable_graph(timetable, next_task)
 
     def _re_compute_dispatchable_graph(self, timetable, next_task=None):
@@ -314,7 +317,11 @@ class TimetableMonitor(TimetableMonitorBase):
         for robot_id in task.assigned_robots:
             try:
                 timetable = self.get_timetable(robot_id)
-                next_task = timetable.get_next_task(task)
+                next_task_id = timetable.get_next_task_id(task)
+                if next_task_id:
+                    next_task = Task.get_task(next_task_id)
+                else:
+                    next_task = None
                 self.remove_task_from_timetable(timetable, task, status, next_task)
                 # TODO: The robot should send a ropod-pose msg and the fleet monitor should update the robot pose
                 if status == TaskStatusConst.COMPLETED:
@@ -376,30 +383,30 @@ class TimetableMonitorProxy(TimetableMonitorBase):
     def remove_task_cb(self, msg):
         payload = msg['payload']
         remove_task = RemoveTaskFromSchedule.from_payload(payload)
-        task = Task.get_task(remove_task.task_id)
+        task = self.tasks.get(remove_task.task_id)
         self.remove_task(task, remove_task.status)
 
     def remove_task(self, task, status):
         try:
             timetable = self.get_timetable(self.robot_id)
-            next_task = timetable.get_next_task(task)
-            self.remove_task_from_timetable(timetable, task, status, next_task)
+            next_task_id = timetable.get_next_task_id(task)
+            next_task = self.tasks.get(next_task_id, None)
+            self.remove_task_from_timetable(timetable, task, status, next_task, store=False)
             # TODO: The robot should send a ropod-pose msg and the robot proxy should update the robot pose
             if status == TaskStatusConst.COMPLETED:
                 self.update_robot_pose(task)
-            task.update_status(status)
+            self.tasks_status[task.task_id] = status
             self.bidder.changed_timetable = True
             self._re_compute_dispatchable_graph(timetable, next_task)
         except (TaskNotFound, EmptyTimetable):
             return
 
     def update_robot_pose(self, task):
-        robot = Robot.get_robot(self.robot_id)
         x, y, theta = self.planner.get_pose(task.request.delivery_location)
-        robot.update_position(x=x, y=y, theta=theta)
+        self.robot.update_position(save=False, x=x, y=y, theta=theta)
 
-    def _update_timepoint(self, task, timetable, r_assigned_time, node_id, task_progress):
-        super()._update_timepoint(task, timetable, r_assigned_time, node_id, task_progress)
+    def _update_timepoint(self, task, timetable, r_assigned_time, node_id, task_progress, store=False):
+        super()._update_timepoint(task, timetable, r_assigned_time, node_id, task_progress, store)
         self.bidder.changed_timetable = True
 
         if self.d_graph_watchdog:
