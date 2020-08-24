@@ -48,7 +48,7 @@ class TimetableMonitorBase:
             task = self.tasks.get(task_status.task_id)
             if task_status.task_status == TaskStatusConst.ONGOING:
                 self.process_task_status_update(task, task_status, timestamp)
-                self.tasks_status[task.task_id] = TaskStatusConst.ALLOCATED
+                self.tasks_status[task.task_id] = task_status.task_status
             if task_status.task_status == TaskStatusConst.COMPLETED:
                 self.process_task_status_update(task, task_status, timestamp)
         except DoesNotExist:

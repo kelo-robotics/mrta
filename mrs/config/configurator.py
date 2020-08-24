@@ -65,7 +65,6 @@ class Configurator:
 
     def config_robot(self, robot_id):
         self.register_api('robot', robot_id=robot_id)
-        self.register_store('robot', robot_id=robot_id)
         self.register_robot_id(robot_id)
         self.configure(**self._config_params)
         return self._components

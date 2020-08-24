@@ -1,7 +1,7 @@
 import logging
+from datetime import datetime
 
 from fmlib.models.tasks import TransportationTask as Task
-from pymodm.errors import DoesNotExist
 from ropod.structs.status import TaskStatus as TaskStatusConst
 
 from mrs.exceptions.execution import InconsistentAssignment
@@ -25,22 +25,21 @@ class ScheduleExecutionMonitor(TimetableMonitorBase):
         self.api = kwargs.get("api")
 
         self.d_graph_update_received = False
+        self.tasks = dict()
+        self.tasks_status = dict()
         self.task = None
 
         self.logger = logging.getLogger('mrs.schedule.monitor.%s' % self.robot_id)
         self.logger.debug("ScheduleMonitor initialized %s", self.robot_id)
 
-    def configure(self, **kwargs):
-        api = kwargs.get('api')
-        if api:
-            self.api = api
-
     def task_cb(self, msg):
         payload = msg['payload']
-        task = Task.from_payload(payload)
-        if self.robot_id in task.assigned_robots:
+        assigned_robots = payload.get("assignedRobots")
+        if self.robot_id in assigned_robots:
+            task = Task.from_payload(payload, save=False)
+            self.tasks[task.task_id] = task
+            self.tasks_status[task.task_id] = TaskStatusConst.DISPATCHED
             self.logger.debug("Received task %s", task.task_id)
-            task.update_status(TaskStatusConst.DISPATCHED)
 
     def d_graph_update_cb(self, msg):
         payload = msg['payload']
@@ -59,20 +58,23 @@ class ScheduleExecutionMonitor(TimetableMonitorBase):
                               task_status.task_id,
                               task_status.robot_id)
             self.send_task_status(task_status, timestamp)
-            task = Task.get_task(task_status.task_id)
+            task = self.tasks.get(task_status.task_id)
 
             if task_status.task_status == TaskStatusConst.ONGOING:
                 self.update_timetable(task, task_status.robot_id, task_status.task_progress, timestamp)
 
             if task_status.task_status == TaskStatusConst.COMPLETED:
                 self.logger.debug("Completing execution of task %s", task.task_id)
+                self.tasks.pop(task_status.task_id)
                 self.task = None
 
-            task.update_status(task_status.task_status)
+            self.tasks_status[task.task_id] = task_status.task_status
 
     def schedule(self, task):
         try:
-            self.scheduler.schedule(task)
+            scheduled_task = self.scheduler.schedule(task)
+            self.tasks[task.task_id] = scheduled_task
+            self.tasks_status[task.task_id] = TaskStatusConst.SCHEDULED
         except InconsistentSchedule:
             if "re-allocate" in self.recovery_method:
                 self.re_allocate(task)
@@ -114,14 +116,14 @@ class ScheduleExecutionMonitor(TimetableMonitorBase):
 
     def re_allocate(self, task):
         self.logger.info("Trigger re-allocation of task %s", task.task_id)
-        # task.update_status(TaskStatusConst.UNALLOCATED)
+        self.tasks_status[task.task_id] = TaskStatusConst.UNALLOCATED
         self.timetable.remove_task(task.task_id)
         task_status = TaskStatus(task.task_id, self.robot_id, TaskStatusConst.UNALLOCATED)
         self.send_task_status(task_status)
 
     def preempt(self, task):
         self.logger.info("Trigger preemption of task %s", task.task_id)
-        # task.update_status(TaskStatusConst.PREEMPTED)
+        self.tasks_status[task.task_id] = TaskStatusConst.PREEMPTED
         self.timetable.remove_task(task.task_id)
         task_status = TaskStatus(task.task_id, self.robot_id, TaskStatusConst.PREEMPTED)
         self.send_task_status(task_status)
@@ -142,22 +144,28 @@ class ScheduleExecutionMonitor(TimetableMonitorBase):
         """ Gets the earliest task assigned to this robot and calls the ``process_task`` method
         for further processing
         """
-        try:
-            tasks = Task.get_tasks_by_robot(self.robot_id)
-            if tasks and self.task is None:
-                earliest_task = Task.get_earliest_task(tasks)
-                if earliest_task:
-                    self.process_task(earliest_task)
-        except DoesNotExist:
-            pass
+        if self.tasks and self.task is None:
+            tasks = list(self.tasks.values())
+            earliest_task = self.get_earliest_task(tasks)
+            self.process_task(earliest_task)
+
+    @staticmethod
+    def get_earliest_task(tasks):
+        earliest_time = datetime.max
+        earliest_task = None
+        for task in tasks:
+            if task.pickup_constraint.earliest_time < earliest_time:
+                earliest_time = task.pickup_constraint.earliest_time
+                earliest_task = task
+        return earliest_task
 
     def process_task(self, task):
-        task_status = task.get_task_status(task.task_id)
+        task_status = self.tasks_status.get(task.task_id)
 
-        if task_status.status == TaskStatusConst.DISPATCHED and self.timetable.has_task(task.task_id):
+        if task_status == TaskStatusConst.DISPATCHED and self.timetable.has_task(task.task_id):
             self.schedule(task)
 
         # For real-time execution add is_executable condition
-        if task_status.status == TaskStatusConst.SCHEDULED:
+        if task_status == TaskStatusConst.SCHEDULED:
             self.send_task(task)
             self.task = task
