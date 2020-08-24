@@ -38,7 +38,7 @@ def load_tasks_to_db(dataset_module, dataset_name, **kwargs):
 
         constraints = TransportationTaskConstraints(hard=request.hard_constraints, temporal=temporal)
 
-        task = TransportationTask.create_new(task_id=task_id, request=request.request_id, constraints=constraints)
+        task = TransportationTask.create_new(task_id=task_id, request=request, constraints=constraints)
 
         tasks.append(task)
 

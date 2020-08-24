@@ -35,8 +35,6 @@ class DGraphUpdate(AsDictMixin):
             timetable.stn = merged_stn
             timetable.dispatchable_graph = merged_dispatchable_graph
 
-        timetable.store()
-
     @staticmethod
     def merge_temporal_graph(previous_graph, new_graph):
         tasks = list()

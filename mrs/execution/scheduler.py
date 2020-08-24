@@ -4,14 +4,12 @@ from datetime import timedelta
 import numpy as np
 from mrs.exceptions.execution import InconsistentAssignment
 from mrs.exceptions.execution import InconsistentSchedule
-from ropod.structs.status import TaskStatus as TaskStatusConst
 
 
 class Scheduler(object):
     def __init__(self, robot_id, timetable, time_resolution, **kwargs):
         self.robot_id = robot_id
         self.timetable = timetable
-        self.timetable.fetch()
         self.time_resolution = time_resolution
         self.logger = logging.getLogger("mrs.scheduler")
         self.logger.debug("Scheduler initialized %s", self.robot_id)
@@ -34,14 +32,9 @@ class Scheduler(object):
             try:
                 self.timetable.assign_timepoint(start_time, node_id)
                 start_time = (self.timetable.ztp + timedelta(seconds=start_time)).to_datetime()
-
-                task_schedule = {"start_time": start_time,
-                                 "finish_time": task.finish_time}
-
-                task.update_schedule(task_schedule)
-                task.update_status(TaskStatusConst.SCHEDULED)
+                task.start_time = start_time
                 self.logger.debug("Task %s scheduled to start at %s", task.task_id, task.start_time)
-                return
+                return task
 
             except InconsistentAssignment as e:
                 self.logger.warning("Task %s could not be scheduled at %s", e.task_id, e.assigned_time)

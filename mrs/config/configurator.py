@@ -59,14 +59,12 @@ class Configurator:
 
     def config_robot_proxy(self, robot_id):
         self.register_api('robot_proxy', robot_id=robot_id)
-        self.register_store('robot_proxy', robot_id=robot_id)
         self.register_robot_id(robot_id)
         self.configure(**self._config_params)
         return self._components
 
     def config_robot(self, robot_id):
         self.register_api('robot', robot_id=robot_id)
-        self.register_store('robot', robot_id=robot_id)
         self.register_robot_id(robot_id)
         self.configure(**self._config_params)
         return self._components

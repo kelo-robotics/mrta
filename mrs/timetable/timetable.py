@@ -2,7 +2,7 @@ import copy
 import logging
 from datetime import timedelta
 
-from fmlib.models.tasks import TransportationTask as Task, TimepointConstraint
+from fmlib.models.tasks import TimepointConstraint
 from stn.stp import STP
 
 from mrs.db.models.timetable import Timetable as TimetableMongo
@@ -102,41 +102,32 @@ class Timetable(STNInterface):
         """
         return self.stn.get_tasks()
 
-    def get_task(self, position):
-        """ Returns the task in the given position
+    def get_task_id(self, position):
+        """ Returns the task_id in the given position
 
         :param position: (int) position in the STN
-        :return: (Task) task
+        :return: (str) task_id
         """
         task_id = self.stn.get_task_id(position)
         if task_id:
-            try:
-                return Task.get_task(task_id)
-            except DoesNotExist:
-                self.logger.warning("Task %s is not in db", task_id)
-                raise DoesNotExist
+            return task_id
         else:
             raise TaskNotFound(position)
 
     def get_task_node_ids(self, task_id):
         return self.stn.get_task_node_ids(task_id)
 
-    def get_next_task(self, task):
+    def get_next_task_id(self, task):
         task_last_node = self.stn.get_task_node_ids(task.task_id)[-1]
         if self.stn.has_node(task_last_node + 1):
             next_task_id = self.stn.nodes[task_last_node + 1]['data'].task_id
-            try:
-                next_task = Task.get_task(next_task_id)
-            except DoesNotExist:
-                self.logger.warning("Task %s is not in db", next_task_id)
-                next_task = Task.create_new(task_id=next_task_id)
-            return next_task
+            return next_task_id
 
     def get_previous_task(self, task):
         task_first_node = self.stn.get_task_node_ids(task.task_id)[0]
         if task_first_node > 1 and self.stn.has_node(task_first_node - 1):
             prev_task_id = self.stn.nodes[task_first_node - 1]['data'].task_id
-            prev_task = Task.get_task(prev_task_id)
+            prev_task = task.get_task(prev_task_id)
             return prev_task
 
     def get_task_position(self, task_id):
@@ -148,14 +139,8 @@ class Timetable(STNInterface):
             return True
         return False
 
-    def get_earliest_task(self):
-        task_id = self.stn.get_earliest_task_id()
-        if task_id:
-            try:
-                task = Task.get_task(task_id)
-                return task
-            except DoesNotExist:
-                self.logger.warning("Task %s is not in db or its first node is not the start node", task_id)
+    def get_earliest_task_id(self):
+        return self.stn.get_earliest_task_id()
 
     def get_r_time(self, task_id, node_type, lower_bound):
         r_time = self.dispatchable_graph.get_time(task_id, node_type, lower_bound)
@@ -197,7 +182,6 @@ class Timetable(STNInterface):
             self.stn.remove_task(node_id)
         else:
             self.logger.warning("Task %s is not in timetable", task_id)
-        self.store()
 
     def remove_task_from_dispatchable_graph(self, task_id):
         task_node_ids = self.dispatchable_graph.get_task_node_ids(task_id)
@@ -208,12 +192,10 @@ class Timetable(STNInterface):
             self.dispatchable_graph.remove_task(node_id)
         else:
             self.logger.warning("Task %s is not in timetable", task_id)
-        self.store()
 
     def remove_node_ids(self, task_node_ids):
         self.stn.remove_node_ids(task_node_ids)
         self.dispatchable_graph.remove_node_ids(task_node_ids)
-        self.store()
 
     def get_timepoint_constraint(self, task_id, constraint_name):
         earliest_time = to_timestamp(self.ztp,

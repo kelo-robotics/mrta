@@ -48,8 +48,9 @@ class Executor(RopodPyre):
         payload = msg['payload']
 
         if msg_type == 'TASK':
-            task = Task.from_payload(payload)
-            if self.robot_id in task.assigned_robots:
+            assigned_robots = payload.get("assignedRobots")
+            if self.robot_id in assigned_robots:
+                task = Task.from_payload(payload, save=False)
                 self.logger.debug("Received task %s", task.task_id)
                 self.task = task
 
