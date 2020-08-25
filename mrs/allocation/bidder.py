@@ -138,7 +138,7 @@ class Bidder:
             if travel_duration is None:
                 self.logger.warning("There was a problem computing the estimated duration between %s and %s "
                                     "Not computing bid for insertion point %s",
-                                    prev_location, task.request.pickup_location, insertion_point)
+                                    prev_location, task.request.start_location, insertion_point)
                 continue
 
             prev_task_is_frozen = self.previous_task_is_frozen(insertion_point)
@@ -160,7 +160,7 @@ class Bidder:
                 if travel_duration is None:
                     self.logger.warning("There was a problem computing the estimated duration between %s and %s "
                                         "Not computing bid for insertion point %s",
-                                        prev_location, next_task.request.pickup_location, insertion_point)
+                                        prev_location, next_task.request.start_location, insertion_point)
                     continue
 
                 prev_task_is_frozen = self.previous_task_is_frozen(insertion_point+1)
@@ -223,7 +223,7 @@ class Bidder:
         else:
             previous_task_id = self.timetable.get_task_id(insertion_point - 1)
             previous_task = self.tasks.get(previous_task_id)
-            previous_location = previous_task.request.delivery_location
+            previous_location = previous_task.request.finish_location
 
         self.logger.debug("Previous location: %s ", previous_location)
         return previous_location
@@ -239,10 +239,10 @@ class Bidder:
         return robot_location
 
     def get_travel_duration(self, task, previous_location):
-        """ Returns time (mean, variance) to go from previous_location to task.pickup_location
+        """ Returns time (mean, variance) to go from previous_location to task.start_location
         """
         try:
-            path = self.planner.get_path(previous_location, task.request.pickup_location)
+            path = self.planner.get_path(previous_location, task.request.start_location)
             mean, variance = self.planner.get_estimated_duration(path)
         except AttributeError:
             self.logger.warning("No planner configured")

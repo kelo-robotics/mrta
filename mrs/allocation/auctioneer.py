@@ -1,7 +1,7 @@
 import logging
 from datetime import timedelta
 
-from fmlib.models.tasks import TransportationTask as Task
+from fmlib.models.tasks import Task
 from mrs.allocation.round import Round
 from mrs.exceptions.allocation import AlternativeTimeSlot
 from mrs.exceptions.allocation import InvalidAllocation
@@ -152,7 +152,7 @@ class Auctioneer(SimulatorInterface):
     def announce_tasks(self):
         tasks = list(self.tasks_to_allocate.values())
         earliest_task = Task.get_earliest_task(tasks)
-        closure_time = earliest_task.pickup_constraint.earliest_time - self.closure_window
+        closure_time = earliest_task.start_constraint.earliest_time - self.closure_window
 
         if not self.is_valid_time(closure_time) and self.alternative_timeslots:
             # Closure window should be long enough to allow robots to bid (tune if necessary)
@@ -192,11 +192,11 @@ class Auctioneer(SimulatorInterface):
         self.api.publish(msg, groups=['TASK-ALLOCATION'])
 
     def update_soft_constraints(self, task):
-        pickup_time_window = task.pickup_constraint.latest_time - task.pickup_constraint.earliest_time
+        pickup_time_window = task.start_constraint.latest_time - task.start_constraint.earliest_time
 
         earliest_pickup_time = self.get_current_time() + timedelta(minutes=5)
         latest_pickup_time = earliest_pickup_time + pickup_time_window
-        task.update_pickup_constraint(earliest_pickup_time, latest_pickup_time)
+        task.update_start_constraint(earliest_pickup_time, latest_pickup_time)
 
     def bid_cb(self, msg):
         payload = msg['payload']
@@ -253,11 +253,12 @@ class Auctioneer(SimulatorInterface):
         pickup_time = to_timestamp(self.timetable_manager.ztp, r_earliest_pickup_time)
         delivery_time = to_timestamp(self.timetable_manager.ztp, r_latest_delivery_time)
 
-        self.logger.debug("Task %s start time: %s", task_id, start_time)
-        self.logger.debug("Task %s pickup time : %s", task_id, pickup_time)
-        self.logger.debug("Task %s latest delivery time: %s", task_id, delivery_time)
+        self.logger.debug("Task %s departure time: %s", task_id, start_time)
+        self.logger.debug("Task %s earliest start time : %s", task_id, pickup_time)
+        self.logger.debug("Task %s latest finish time: %s", task_id, delivery_time)
 
-        task_schedule = {"start_time": start_time.to_datetime(),
+        task_schedule = {"departure_time": start_time.to_datetime(),
+                         "start_time": start_time.to_datetime(),
                          "finish_time": delivery_time.to_datetime()}
 
         return task_schedule

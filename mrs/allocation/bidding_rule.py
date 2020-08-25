@@ -43,9 +43,9 @@ class BiddingRuleBase:
                           round_id,
                           metrics)
             else:
-                temporal_metric = abs(task.pickup_constraint.earliest_time - task.request.earliest_pickup_time).total_seconds()
+                temporal_metric = abs(task.start_constraint.earliest_time - task.request.earliest_pickup_time).total_seconds()
                 metrics.objective = temporal_metric
-                alternative_start_time = task.pickup_constraint.earliest_time
+                alternative_start_time = task.start_constraint.earliest_time
 
                 bid = Bid(task.task_id,
                           robot_id,

@@ -86,7 +86,7 @@ class Dispatcher(SimulatorInterface):
     def get_pre_task_action(self, task, robot_id):
         pose = self.fleet_monitor.get_robot_pose(robot_id)
         robot_location = self.get_robot_location(pose)
-        path = self.get_path(robot_location, task.request.pickup_location)
+        path = self.get_path(robot_location, task.request.start_location)
         mean, variance = self.get_path_estimated_duration(path)
         action = GoTo.create_new(type="ROBOT-TO-PICKUP", locations=path)
         action.update_duration(mean, variance)

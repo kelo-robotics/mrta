@@ -2,7 +2,7 @@ import argparse
 import logging.config
 
 from fmlib.models.robot import Robot as RobotModel
-from fmlib.models.tasks import TransportationTask as Task
+from fmlib.models import tasks
 from ropod.structs.status import TaskStatus as TaskStatusConst
 
 from mrs.allocation.bidder import Bidder
@@ -56,7 +56,9 @@ class RobotProxy:
         payload = msg['payload']
         assigned_robots = payload.get("assignedRobots")
         if self.robot_id in assigned_robots:
-            task = Task.from_payload(payload, save=False)
+            task_type = payload.pop("_cls").split('.')[-1]
+            task_cls = getattr(tasks, task_type)
+            task = task_cls.from_payload(payload, save=False)
             self.tasks[task.task_id] = task
             self.tasks_status[task.task_id] = TaskStatusConst.DISPATCHED
             self.logger.debug("Received task %s", task.task_id)

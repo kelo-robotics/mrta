@@ -2,11 +2,10 @@ import collections
 from datetime import datetime, timedelta
 
 from fmlib.models.requests import TransportationRequest
-from fmlib.models.tasks import TransportationTask, TransportationTaskConstraints
-from fmlib.models.tasks import TimepointConstraint, InterTimepointConstraint, TransportationTemporalConstraints
-from ropod.utils.uuid import generate_uuid
-
+from fmlib.models.tasks import TimepointConstraint, InterTimepointConstraint, TemporalConstraints
+from fmlib.models.tasks import TransportationTask, TaskConstraints
 from mrs.utils.utils import load_yaml_file_from_module
+from ropod.utils.uuid import generate_uuid
 
 
 def load_tasks_to_db(dataset_module, dataset_name, **kwargs):
@@ -34,9 +33,9 @@ def load_tasks_to_db(dataset_module, dataset_name, **kwargs):
         pickup = TimepointConstraint(earliest_time=request.earliest_pickup_time,
                                      latest_time=request.latest_pickup_time)
 
-        temporal = TransportationTemporalConstraints(pickup=pickup, duration=duration)
+        temporal = TemporalConstraints(start=pickup, duration=duration)
 
-        constraints = TransportationTaskConstraints(hard=request.hard_constraints, temporal=temporal)
+        constraints = TaskConstraints(hard=request.hard_constraints, temporal=temporal)
 
         task = TransportationTask.create_new(task_id=task_id, request=request, constraints=constraints)
 

@@ -66,11 +66,11 @@ class STNInterface:
         return start_timepoint
 
     def get_pickup_timepoint(self, task, travel_edge, insertion_point):
-        r_earliest_pickup_time = relative_to_ztp(self.ztp, task.pickup_constraint.earliest_time)
-        r_latest_pickup_time = relative_to_ztp(self.ztp, task.pickup_constraint.latest_time)
+        r_earliest_pickup_time = relative_to_ztp(self.ztp, task.start_constraint.earliest_time)
+        r_latest_pickup_time = relative_to_ztp(self.ztp, task.start_constraint.latest_time)
 
         if not task.hard_constraints and insertion_point > 1:
-            pickup_time_window = task.pickup_constraint.latest_time - task.pickup_constraint.earliest_time
+            pickup_time_window = task.start_constraint.latest_time - task.start_constraint.earliest_time
             r_earliest_delivery_time_previous_task = self.get_r_time_previous_task(insertion_point, "delivery")
 
             r_earliest_pickup_time = r_earliest_delivery_time_previous_task + travel_edge.mean
@@ -79,7 +79,7 @@ class STNInterface:
             earliest_pickup_time = to_timestamp(self.ztp, r_earliest_pickup_time).to_datetime()
             latest_pickup_time = to_timestamp(self.ztp, r_latest_pickup_time).to_datetime()
 
-            task.update_pickup_constraint(earliest_pickup_time, latest_pickup_time)
+            task.update_start_constraint(earliest_pickup_time, latest_pickup_time, save=False)
 
         pickup_timepoint = Timepoint(name="pickup", r_earliest_time=r_earliest_pickup_time,
                                      r_latest_time=r_latest_pickup_time)

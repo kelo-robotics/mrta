@@ -110,8 +110,8 @@ class CCU:
             task (obj)
 
         """
-        path = self.dispatcher.get_path(task.request.pickup_location,
-                                        task.request.delivery_location)
+        path = self.dispatcher.get_path(task.request.start_location,
+                                        task.request.finish_location)
 
         mean, variance = self.get_task_duration(path)
         task.update_duration(mean, variance)

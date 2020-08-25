@@ -211,8 +211,8 @@ class TimetableMonitorBase:
 
     def update_pre_task_constraint(self, prev_task, task, timetable):
         self.logger.debug("Update pre_task constraint of task %s", task.task_id)
-        prev_location = prev_task.request.delivery_location
-        path = self.planner.get_path(prev_location, task.request.pickup_location)
+        prev_location = prev_task.request.finish_location
+        path = self.planner.get_path(prev_location, task.request.start_location)
         mean, variance = self.planner.get_estimated_duration(path)
 
         stn_task = timetable.get_stn_task(task.task_id)
@@ -223,7 +223,7 @@ class TimetableMonitorBase:
     def update_robot_poses(self, task):
         for robot_id in task.assigned_robots:
             robot = Robot.get_robot(robot_id)
-            x, y, theta = self.planner.get_pose(task.request.delivery_location)
+            x, y, theta = self.planner.get_pose(task.request.finish_location)
             robot.update_position(x=x, y=y, theta=theta)
 
 
@@ -402,7 +402,7 @@ class TimetableMonitorProxy(TimetableMonitorBase):
             return
 
     def update_robot_pose(self, task):
-        x, y, theta = self.planner.get_pose(task.request.delivery_location)
+        x, y, theta = self.planner.get_pose(task.request.finish_location)
         self.robot.update_position(save=False, x=x, y=y, theta=theta)
 
     def _update_timepoint(self, task, timetable, r_assigned_time, node_id, task_progress, store=False):
