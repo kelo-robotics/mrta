@@ -201,7 +201,7 @@ class Bidder:
     def insert_in(self, insertion_point):
         try:
             task_id = self.timetable.get_task_id(insertion_point)
-            task_status = self.tasks_status.get('task_id')
+            task_status = self.tasks_status.get(task_id)
             if task_status in [TaskStatusConst.DISPATCHED, TaskStatusConst.ONGOING]:
                 self.logger.debug("Task %s was already dispatched "
                                   "Not computing bid for this insertion point %s", task_id, insertion_point)

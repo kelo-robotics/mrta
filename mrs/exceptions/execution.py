@@ -23,7 +23,7 @@ class InconsistentAssignment(Exception):
 
         assigned_time (float): time relative to the zero timepoint
         task_id (UUID): id that uniquely identifies the task
-        node_type(str): type of the node (start, pickup, delivery)
+        node_type(str): type of the node (departure, start, finish)
         """
         Exception.__init__(self, assigned_time, task_id, node_type)
         self.assigned_time = assigned_time

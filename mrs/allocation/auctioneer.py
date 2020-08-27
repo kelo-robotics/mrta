@@ -192,11 +192,11 @@ class Auctioneer(SimulatorInterface):
         self.api.publish(msg, groups=['TASK-ALLOCATION'])
 
     def update_soft_constraints(self, task):
-        pickup_time_window = task.start_constraint.latest_time - task.start_constraint.earliest_time
+        start_time_window = task.start_constraint.latest_time - task.start_constraint.earliest_time
 
-        earliest_pickup_time = self.get_current_time() + timedelta(minutes=5)
-        latest_pickup_time = earliest_pickup_time + pickup_time_window
-        task.update_start_constraint(earliest_pickup_time, latest_pickup_time)
+        earliest_start_time = self.get_current_time() + timedelta(minutes=5)
+        latest_start_time = earliest_start_time + start_time_window
+        task.update_start_constraint(earliest_start_time, latest_start_time)
 
     def bid_cb(self, msg):
         payload = msg['payload']
@@ -240,26 +240,27 @@ class Auctioneer(SimulatorInterface):
 
     def get_task_schedule(self, task_id, robot_id):
         """ Returns a dict
-            start_time:  earliest start time according to the dispatchable graph
-            finish_time: latest start time according to the dispatchable graph
+            departure_time: earliest departure time according to the dispatchable graph
+            start_time : earliest start time according to the dispatchable graph
+            finish_time: latest finish time according to the dispatchable graph
         """
         timetable = self.timetable_manager.get(robot_id)
 
+        r_earliest_departure_time = timetable.dispatchable_graph.get_time(task_id, "departure")
         r_earliest_start_time = timetable.dispatchable_graph.get_time(task_id, "start")
-        r_earliest_pickup_time = timetable.dispatchable_graph.get_time(task_id, "pickup")
-        r_latest_delivery_time = timetable.dispatchable_graph.get_time(task_id, "delivery", False)
+        r_latest_finish_time = timetable.dispatchable_graph.get_time(task_id, "finish", False)
 
+        departure_time = to_timestamp(self.timetable_manager.ztp, r_earliest_departure_time)
         start_time = to_timestamp(self.timetable_manager.ztp, r_earliest_start_time)
-        pickup_time = to_timestamp(self.timetable_manager.ztp, r_earliest_pickup_time)
-        delivery_time = to_timestamp(self.timetable_manager.ztp, r_latest_delivery_time)
+        finish_time = to_timestamp(self.timetable_manager.ztp, r_latest_finish_time)
 
-        self.logger.debug("Task %s departure time: %s", task_id, start_time)
-        self.logger.debug("Task %s earliest start time : %s", task_id, pickup_time)
-        self.logger.debug("Task %s latest finish time: %s", task_id, delivery_time)
+        self.logger.debug("Task %s departure time: %s", task_id, departure_time)
+        self.logger.debug("Task %s earliest start time : %s", task_id, start_time)
+        self.logger.debug("Task %s latest finish time: %s", task_id, finish_time)
 
-        task_schedule = {"departure_time": start_time.to_datetime(),
+        task_schedule = {"departure_time": departure_time.to_datetime(),
                          "start_time": start_time.to_datetime(),
-                         "finish_time": delivery_time.to_datetime()}
+                         "finish_time": finish_time.to_datetime()}
 
         return task_schedule
 

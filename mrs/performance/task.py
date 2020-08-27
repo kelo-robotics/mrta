@@ -25,9 +25,9 @@ class TaskPerformanceTracker:
         time_to_allocate = allocation_time
         n_previously_allocated_tasks = len(timetable.get_tasks()) - 1
 
-        start_time = timetable.get_timepoint_constraint(task_id, "start")
-        pickup_time = timetable.get_timepoint_constraint(task_id, "pickup")
-        delivery_time = timetable.get_timepoint_constraint(task_id, "delivery")
+        start_time = timetable.get_timepoint_constraint(task_id, "departure")
+        pickup_time = timetable.get_timepoint_constraint(task_id, "start")
+        delivery_time = timetable.get_timepoint_constraint(task_id, "finish")
 
         return {'time_to_allocate': time_to_allocate,
                 'n_previously_allocated_tasks': n_previously_allocated_tasks,
