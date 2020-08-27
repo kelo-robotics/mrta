@@ -1,7 +1,7 @@
 import logging
 from datetime import datetime
 
-from fmlib.models.tasks import TransportationTask as Task
+from fmlib.models import tasks
 from ropod.structs.status import TaskStatus as TaskStatusConst
 
 from mrs.exceptions.execution import InconsistentAssignment
@@ -36,7 +36,9 @@ class ScheduleExecutionMonitor(TimetableMonitorBase):
         payload = msg['payload']
         assigned_robots = payload.get("assignedRobots")
         if self.robot_id in assigned_robots:
-            task = Task.from_payload(payload, save=False)
+            task_type = payload.pop("_cls").split('.')[-1]
+            task_cls = getattr(tasks, task_type)
+            task = task_cls.from_payload(payload, save=False)
             self.tasks[task.task_id] = task
             self.tasks_status[task.task_id] = TaskStatusConst.DISPATCHED
             self.logger.debug("Received task %s", task.task_id)
@@ -154,8 +156,8 @@ class ScheduleExecutionMonitor(TimetableMonitorBase):
         earliest_time = datetime.max
         earliest_task = None
         for task in tasks:
-            if task.pickup_constraint.earliest_time < earliest_time:
-                earliest_time = task.pickup_constraint.earliest_time
+            if task.start_constraint.earliest_time < earliest_time:
+                earliest_time = task.start_constraint.earliest_time
                 earliest_task = task
         return earliest_task
 

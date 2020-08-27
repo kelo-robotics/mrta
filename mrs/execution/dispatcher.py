@@ -37,6 +37,7 @@ class Dispatcher(SimulatorInterface):
 
         self.robot_ids = list()
         self.d_graph_updates = dict()
+        self.tasks = dict()
 
         self.logger.debug("Dispatcher started")
 
@@ -86,7 +87,7 @@ class Dispatcher(SimulatorInterface):
     def get_pre_task_action(self, task, robot_id):
         pose = self.fleet_monitor.get_robot_pose(robot_id)
         robot_location = self.get_robot_location(pose)
-        path = self.get_path(robot_location, task.request.pickup_location)
+        path = self.get_path(robot_location, task.request.start_location)
         mean, variance = self.get_path_estimated_duration(path)
         action = GoTo.create_new(type="ROBOT-TO-PICKUP", locations=path)
         action.update_duration(mean, variance)
@@ -102,9 +103,9 @@ class Dispatcher(SimulatorInterface):
         for robot_id in self.robot_ids:
             timetable = self.timetable_manager.get_timetable(robot_id)
             task_id = timetable.get_earliest_task_id()
-            task = Task.get_task(task_id) if task_id else None
+            task = self.tasks.get(task_id) if task_id else None
             if task and task.status.status == TaskStatusConst.ALLOCATED:
-                start_time = timetable.get_start_time(task.task_id)
+                start_time = timetable.get_departure_time(task.task_id)
                 if self.is_schedulable(start_time):
                     self.add_pre_task_action(task, robot_id)
                     self.send_d_graph_update(robot_id)

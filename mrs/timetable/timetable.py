@@ -1,4 +1,5 @@
 import copy
+import uuid
 import logging
 from datetime import timedelta
 
@@ -72,15 +73,15 @@ class Timetable(STNInterface):
         raise InconsistentAssignment(assigned_time, node.task_id, node.node_type)
 
     def is_next_task_invalid(self, task, next_task):
-        finish_current_task = self.dispatchable_graph.get_time(task.task_id, 'delivery', False)
-        earliest_start_next_task = self.dispatchable_graph.get_time(next_task.task_id, 'start')
-        latest_start_next_task = self.dispatchable_graph.get_time(next_task.task_id, 'start', False)
-        if latest_start_next_task < finish_current_task:
+        finish_current_task = self.dispatchable_graph.get_time(task.task_id, 'finish', False)
+        earliest_departure_next_task = self.dispatchable_graph.get_time(next_task.task_id, 'departure')
+        latest_departure_next_task = self.dispatchable_graph.get_time(next_task.task_id, 'departure', False)
+        if latest_departure_next_task < finish_current_task:
             self.logger.warning("Task %s is invalid", next_task.task_id)
             return True
-        elif earliest_start_next_task < finish_current_task:
-            # Next task is valid but we need to update its earliest start time
-            self.dispatchable_graph.assign_earliest_time(finish_current_task, next_task.task_id, "start", force=True)
+        elif earliest_departure_next_task < finish_current_task:
+            # Next task is valid but we need to update its earliest departure time
+            self.dispatchable_graph.assign_earliest_time(finish_current_task, next_task.task_id, "departure", force=True)
         return False
 
     def update_timepoint(self, assigned_time, node_id):
@@ -106,7 +107,7 @@ class Timetable(STNInterface):
         """ Returns the task_id in the given position
 
         :param position: (int) position in the STN
-        :return: (str) task_id
+        :return: (uuid.UUID) task_id
         """
         task_id = self.stn.get_task_id(position)
         if task_id:
@@ -123,12 +124,11 @@ class Timetable(STNInterface):
             next_task_id = self.stn.nodes[task_last_node + 1]['data'].task_id
             return next_task_id
 
-    def get_previous_task(self, task):
+    def get_previous_task_id(self, task):
         task_first_node = self.stn.get_task_node_ids(task.task_id)[0]
         if task_first_node > 1 and self.stn.has_node(task_first_node - 1):
             prev_task_id = self.stn.nodes[task_first_node - 1]['data'].task_id
-            prev_task = task.get_task(prev_task_id)
-            return prev_task
+            return prev_task_id
 
     def get_task_position(self, task_id):
         return self.stn.get_task_position(task_id)
@@ -146,20 +146,20 @@ class Timetable(STNInterface):
         r_time = self.dispatchable_graph.get_time(task_id, node_type, lower_bound)
         return r_time
 
+    def get_departure_time(self, task_id, lower_bound=True):
+        r_departure_time = self.get_r_time(task_id, 'departure', lower_bound)
+        departure_time = self.ztp + timedelta(seconds=r_departure_time)
+        return departure_time
+
     def get_start_time(self, task_id, lower_bound=True):
         r_start_time = self.get_r_time(task_id, 'start', lower_bound)
         start_time = self.ztp + timedelta(seconds=r_start_time)
         return start_time
 
-    def get_pickup_time(self, task_id, lower_bound=True):
-        r_pickup_time = self.get_r_time(task_id, 'pickup', lower_bound)
-        pickup_time = self.ztp + timedelta(seconds=r_pickup_time)
-        return pickup_time
-
-    def get_delivery_time(self, task_id, lower_bound=True):
-        r_delivery_time = self.get_r_time(task_id, 'delivery', lower_bound)
-        delivery_time = self.ztp + timedelta(seconds=r_delivery_time)
-        return delivery_time
+    def get_finish_time(self, task_id, lower_bound=True):
+        r_finish_time = self.get_r_time(task_id, 'finish', lower_bound)
+        finish_time = self.ztp + timedelta(seconds=r_finish_time)
+        return finish_time
 
     def check_is_task_delayed(self, task, assigned_time, node_id):
         latest_time = self.dispatchable_graph.get_node_latest_time(node_id)

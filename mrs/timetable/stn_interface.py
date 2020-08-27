@@ -32,62 +32,62 @@ class STNInterface:
         travel_edge = Edge(name="travel_time", mean=travel_duration.mean, variance=travel_duration.variance)
         duration_edge = Edge(name="work_time", mean=task.duration.mean, variance=task.duration.variance)
 
-        pickup_timepoint = self.get_pickup_timepoint(task, travel_edge, insertion_point)
-        start_timepoint = self.get_start_timepoint(pickup_timepoint, travel_edge, insertion_point, earliest_admissible_time,
+        start_timepoint = self.get_start_timepoint(task, travel_edge, insertion_point)
+        departure_timepoint = self.get_departure_timepoint(start_timepoint, travel_edge, insertion_point, earliest_admissible_time,
                                                    previous_task_is_frozen)
-        delivery_timepoint = self.get_delivery_timepoint(pickup_timepoint, duration_edge)
+        finish_timepoint = self.get_finish_timepoint(start_timepoint, duration_edge)
 
         edges = [travel_edge, duration_edge]
-        timepoints = [start_timepoint, pickup_timepoint, delivery_timepoint]
-        pickup_action_id = task.plan[0].actions[0].action_id
-        delivery_action_id = task.plan[0].actions[-1].action_id
+        timepoints = [departure_timepoint, start_timepoint, finish_timepoint]
+        start_action_id = task.plan[0].actions[0].action_id
+        finish_action_id = task.plan[0].actions[-1].action_id
 
-        stn_task = STNTask(task.task_id, timepoints, edges, pickup_action_id, delivery_action_id)
+        stn_task = STNTask(task.task_id, timepoints, edges, start_action_id, finish_action_id)
         return stn_task
 
     def update_stn_task(self, stn_task, travel_duration, insertion_point, earliest_admissible_time, previous_task_is_frozen):
         travel_edge = Edge(name="travel_time", mean=travel_duration.mean, variance=travel_duration.variance)
-        pickup_timepoint = stn_task.get_timepoint("pickup")
-        start_timepoint = self.get_start_timepoint(pickup_timepoint, travel_edge, insertion_point, earliest_admissible_time,
+        start_timepoint = stn_task.get_timepoint("start")
+        departure_timepoint = self.get_departure_timepoint(start_timepoint, travel_edge, insertion_point, earliest_admissible_time,
                                                    previous_task_is_frozen)
-        stn_task.update_timepoint("start", start_timepoint.r_earliest_time, start_timepoint.r_latest_time)
+        stn_task.update_timepoint("departure", departure_timepoint.r_earliest_time, departure_timepoint.r_latest_time)
         return stn_task
 
-    def get_start_timepoint(self, pickup_timepoint, travel_edge, insertion_point, earliest_admissible_time, previous_task_is_frozen):
-        start_timepoint = self.stn.get_prev_timepoint("start", pickup_timepoint, travel_edge)
+    def get_departure_timepoint(self, start_timepoint, travel_edge, insertion_point, earliest_admissible_time, previous_task_is_frozen):
+        departure_timepoint = self.stn.get_prev_timepoint("departure", start_timepoint, travel_edge)
 
         if insertion_point == 1:
             r_earliest_admissible_time = relative_to_ztp(self.ztp, earliest_admissible_time.to_datetime())
-            start_timepoint.r_earliest_time = max(r_earliest_admissible_time, start_timepoint.r_earliest_time)
+            departure_timepoint.r_earliest_time = max(r_earliest_admissible_time, departure_timepoint.r_earliest_time)
 
         if insertion_point > 1 and previous_task_is_frozen:
-            r_latest_delivery_time_previous_task = self.get_r_time_previous_task(insertion_point, "delivery", earliest=False)
-            start_timepoint.r_earliest_time = max(start_timepoint.r_earliest_time, r_latest_delivery_time_previous_task)
-        return start_timepoint
+            r_latest_finish_time_previous_task = self.get_r_time_previous_task(insertion_point, "finish", earliest=False)
+            departure_timepoint.r_earliest_time = max(departure_timepoint.r_earliest_time, r_latest_finish_time_previous_task)
+        return departure_timepoint
 
-    def get_pickup_timepoint(self, task, travel_edge, insertion_point):
-        r_earliest_pickup_time = relative_to_ztp(self.ztp, task.pickup_constraint.earliest_time)
-        r_latest_pickup_time = relative_to_ztp(self.ztp, task.pickup_constraint.latest_time)
+    def get_start_timepoint(self, task, travel_edge, insertion_point):
+        r_earliest_start_time = relative_to_ztp(self.ztp, task.start_constraint.earliest_time)
+        r_latest_start_time = relative_to_ztp(self.ztp, task.start_constraint.latest_time)
 
         if not task.hard_constraints and insertion_point > 1:
-            pickup_time_window = task.pickup_constraint.latest_time - task.pickup_constraint.earliest_time
-            r_earliest_delivery_time_previous_task = self.get_r_time_previous_task(insertion_point, "delivery")
+            start_time_window = task.start_constraint.latest_time - task.start_constraint.earliest_time
+            r_earliest_finish_time_previous_task = self.get_r_time_previous_task(insertion_point, "finish")
 
-            r_earliest_pickup_time = r_earliest_delivery_time_previous_task + travel_edge.mean
-            r_latest_pickup_time = r_earliest_pickup_time + pickup_time_window.total_seconds()
+            r_earliest_start_time = r_earliest_finish_time_previous_task + travel_edge.mean
+            r_latest_start_time = r_earliest_start_time + start_time_window.total_seconds()
 
-            earliest_pickup_time = to_timestamp(self.ztp, r_earliest_pickup_time).to_datetime()
-            latest_pickup_time = to_timestamp(self.ztp, r_latest_pickup_time).to_datetime()
+            earliest_start_time = to_timestamp(self.ztp, r_earliest_start_time).to_datetime()
+            latest_start_time = to_timestamp(self.ztp, r_latest_start_time).to_datetime()
 
-            task.update_pickup_constraint(earliest_pickup_time, latest_pickup_time)
+            task.update_start_constraint(earliest_start_time, latest_start_time, save=False)
 
-        pickup_timepoint = Timepoint(name="pickup", r_earliest_time=r_earliest_pickup_time,
-                                     r_latest_time=r_latest_pickup_time)
-        return pickup_timepoint
+        start_timepoint = Timepoint(name="start", r_earliest_time=r_earliest_start_time,
+                                    r_latest_time=r_latest_start_time)
+        return start_timepoint
 
-    def get_delivery_timepoint(self, pickup_timepoint, duration_edge):
-        delivery_timepoint = self.stn.get_next_timepoint("delivery", pickup_timepoint, duration_edge)
-        return delivery_timepoint
+    def get_finish_timepoint(self, start_timepoint, duration_edge):
+        finish_timepoint = self.stn.get_next_timepoint("finish", start_timepoint, duration_edge)
+        return finish_timepoint
 
     def get_r_time_previous_task(self, insertion_point, node_type, earliest=True):
         task_id = self.stn.get_task_id(insertion_point-1)

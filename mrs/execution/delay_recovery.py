@@ -1,4 +1,6 @@
 import logging
+
+from fmlib.models import tasks
 from ropod.structs.status import ActionStatus as ActionStatusConst
 
 
@@ -20,7 +22,8 @@ class RecoveryMethod:
         next_task_id = timetable.get_next_task_id(task)
 
         if next_task_id and self.is_next_task_late(timetable, task, next_task_id, task_progress, r_assigned_time):
-            return task(task_id=next_task_id)
+            task_cls = getattr(tasks, type(task).__name__)
+            return task_cls(task_id=next_task_id)
 
     def is_next_task_late(self, timetable, task, next_task_id, task_progress, r_assigned_time):
         self.logger.debug("Checking if task %s is at risk", next_task_id)

@@ -70,10 +70,19 @@ class CCU:
         self.logger = logging.getLogger("mrs.ccu")
         self.logger.info("Initialized CCU")
 
+        self.tasks = dict()
+        self.pass_on_variables()
+
     def configure(self, **kwargs):
         for key, value in kwargs.items():
             self.logger.debug("Adding %s", key)
             self.__dict__[key] = value
+
+    def pass_on_variables(self):
+        for component_name, component in self.__dict__.items():
+            if hasattr(component, 'tasks'):
+                self.logger.debug("Passing tasks to: %s", component_name)
+                component.tasks = self.tasks
 
     def start_test_cb(self, msg):
         """ Starts test upon reception of start-test message
@@ -98,6 +107,7 @@ class CCU:
         for task in tasks:
             self.add_task_plan(task)
             TaskPerformance.create_new(task_id=task.task_id)
+            self.tasks[task.task_id] = task
 
         self.simulator_interface.start(initial_time)
 
@@ -110,8 +120,8 @@ class CCU:
             task (obj)
 
         """
-        path = self.dispatcher.get_path(task.request.pickup_location,
-                                        task.request.delivery_location)
+        path = self.dispatcher.get_path(task.request.start_location,
+                                        task.request.finish_location)
 
         mean, variance = self.get_task_duration(path)
         task.update_duration(mean, variance)

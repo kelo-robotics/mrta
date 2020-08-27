@@ -23,6 +23,7 @@ class TimetableMonitorBase:
         self.d_graph_watchdog = kwargs.get("d_graph_watchdog", False)
         self.api = kwargs.get('api')
         self.logger = logging.getLogger("mrs.timetable.monitor")
+        self.tasks = dict()
 
     def configure(self, **kwargs):
         for key, value in kwargs.items():
@@ -68,20 +69,20 @@ class TimetableMonitorBase:
 
         if task_progress.action_id == first_action_id and \
                 task_progress.action_status.status == ActionStatusConst.ONGOING:
-            node_id, node = timetable.stn.get_node_by_type(task.task_id, 'start')
+            node_id, node = timetable.stn.get_node_by_type(task.task_id, 'departure')
             self._update_timepoint(task, timetable, r_assigned_time, node_id, task_progress)
             try:
                 self.performance_tracker.update_scheduling_metrics(task.task_id, timetable)
             except AttributeError:
                 pass
         else:
-            # An action could be associated to two nodes, e.g., between pickup and delivery there is only one action
+            # An action could be associated to two nodes, e.g., between start and finish there is only one action
             nodes = timetable.stn.get_nodes_by_action(task_progress.action_id)
 
             for node_id, node in nodes:
-                if (node.node_type == 'pickup' and
+                if (node.node_type == 'start' and
                     task_progress.action_status.status == ActionStatusConst.ONGOING) or \
-                        (node.node_type == 'delivery' and
+                        (node.node_type == 'finish' and
                          task_progress.action_status.status == ActionStatusConst.COMPLETED):
                     self._update_timepoint(task, timetable, r_assigned_time, node_id, task_progress)
 
@@ -91,8 +92,8 @@ class TimetableMonitorBase:
 
     def _update_edges(self, task, timetable, store=True):
         nodes = timetable.stn.get_nodes_by_task(task.task_id)
-        self._update_edge(timetable, 'start', 'pickup', nodes)
-        self._update_edge(timetable, 'pickup', 'delivery', nodes)
+        self._update_edge(timetable, 'departure', 'start', nodes)
+        self._update_edge(timetable, 'start', 'finish', nodes)
 
         self.logger.debug("Updated stn: \n %s ", timetable.stn)
         self.logger.debug("Updated dispatchable graph: \n %s", timetable.dispatchable_graph)
@@ -134,8 +135,8 @@ class TimetableMonitorBase:
 
         if task_progress.action_id == first_action_id and \
                 task_progress.action_status.status == ActionStatusConst.ONGOING:
-            self.logger.debug("Task %s start time %s", task.task_id, timestamp)
-            task_schedule = {"start_time": timestamp,
+            self.logger.debug("Task %s departure time %s", task.task_id, timestamp)
+            task_schedule = {"departure_time": timestamp,
                              "finish_time": task.finish_time}
             task.update_schedule(task_schedule)
 
@@ -176,7 +177,8 @@ class TimetableMonitorBase:
             self.logger.warning("Timetable of %s is empty", timetable.robot_id)
             raise EmptyTimetable
 
-        prev_task = timetable.get_previous_task(task)
+        prev_task_id = timetable.get_previous_task_id(task)
+        prev_task = self.tasks.get(prev_task_id)
         earliest_task_id = timetable.get_task_id(position=1)
 
         if task.task_id == earliest_task_id and next_task:
@@ -187,6 +189,8 @@ class TimetableMonitorBase:
         if prev_task and next_task:
             self.update_pre_task_constraint(prev_task, next_task, timetable)
 
+        self.tasks.pop(task.task_id)
+
         if store:
             timetable.store()
         self.logger.debug("STN robot %s: %s", timetable.robot_id, timetable.stn)
@@ -195,24 +199,24 @@ class TimetableMonitorBase:
     @staticmethod
     def _remove_first_task(task, next_task, status, timetable):
         if status == TaskStatusConst.COMPLETED:
-            earliest_time = timetable.stn.get_time(task.task_id, 'delivery', False)
-            timetable.stn.assign_earliest_time(earliest_time, next_task.task_id, 'start', force=True)
+            earliest_time = timetable.stn.get_time(task.task_id, 'finish', False)
+            timetable.stn.assign_earliest_time(earliest_time, next_task.task_id, 'departure', force=True)
         else:
             nodes = timetable.stn.get_nodes_by_task(task.task_id)
             node_id, node = nodes[0]
             earliest_time = timetable.stn.get_node_earliest_time(node_id)
-            timetable.stn.assign_earliest_time(earliest_time, next_task.task_id, 'start', force=True)
+            timetable.stn.assign_earliest_time(earliest_time, next_task.task_id, 'departure', force=True)
 
-        start_next_task = timetable.dispatchable_graph.get_time(next_task.task_id, 'start')
+        start_next_task = timetable.dispatchable_graph.get_time(next_task.task_id, 'departure')
         if start_next_task < earliest_time:
-            timetable.dispatchable_graph.assign_earliest_time(earliest_time, next_task.task_id, 'start', force=True)
+            timetable.dispatchable_graph.assign_earliest_time(earliest_time, next_task.task_id, 'departure', force=True)
 
         timetable.remove_task(task.task_id)
 
     def update_pre_task_constraint(self, prev_task, task, timetable):
         self.logger.debug("Update pre_task constraint of task %s", task.task_id)
-        prev_location = prev_task.request.delivery_location
-        path = self.planner.get_path(prev_location, task.request.pickup_location)
+        prev_location = prev_task.request.finish_location
+        path = self.planner.get_path(prev_location, task.request.start_location)
         mean, variance = self.planner.get_estimated_duration(path)
 
         stn_task = timetable.get_stn_task(task.task_id)
@@ -223,7 +227,7 @@ class TimetableMonitorBase:
     def update_robot_poses(self, task):
         for robot_id in task.assigned_robots:
             robot = Robot.get_robot(robot_id)
-            x, y, theta = self.planner.get_pose(task.request.delivery_location)
+            x, y, theta = self.planner.get_pose(task.request.finish_location)
             robot.update_position(x=x, y=y, theta=theta)
 
 
@@ -402,7 +406,7 @@ class TimetableMonitorProxy(TimetableMonitorBase):
             return
 
     def update_robot_pose(self, task):
-        x, y, theta = self.planner.get_pose(task.request.delivery_location)
+        x, y, theta = self.planner.get_pose(task.request.finish_location)
         self.robot.update_position(save=False, x=x, y=y, theta=theta)
 
     def _update_timepoint(self, task, timetable, r_assigned_time, node_id, task_progress, store=False):
