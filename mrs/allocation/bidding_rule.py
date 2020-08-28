@@ -1,6 +1,7 @@
 import math
 from datetime import timedelta
 
+from fmlib.models.tasks import TimepointConstraint
 from mrs.messages.bid import Bid, Metrics
 from stn.exceptions.stp import NoSTPSolution
 
@@ -37,11 +38,20 @@ class BiddingRuleBase:
             print("stn: ", stn)
             print("dispatchable graph: ", dispatchable_graph)
 
+            r_earliest_departure_time = dispatchable_graph.get_time(task.task_id, "departure")
+            r_latest_departure_time = dispatchable_graph.get_time(task.task_id, "departure", lower_bound=False)
+            earliest_departure_time = self.timetable.ztp + timedelta(seconds=r_earliest_departure_time)
+            latest_departure_time = self.timetable.ztp + timedelta(seconds=r_latest_departure_time)
+
+            departure_time = TimepointConstraint(earliest_time=earliest_departure_time.to_datetime(),
+                                                 latest_time=latest_departure_time.to_datetime())
+
             if task.constraints.hard:
                 bid = Bid(task.task_id,
                           robot_id,
                           round_id,
-                          metrics)
+                          metrics,
+                          departure_time)
             else:
                 temporal_metric = abs(task.start_constraint.earliest_time - task.request.earliest_start_time).total_seconds()
                 metrics.objective = temporal_metric
@@ -51,12 +61,8 @@ class BiddingRuleBase:
                           robot_id,
                           round_id,
                           metrics,
+                          departure_time,
                           alternative_start_time=alternative_start_time)
-
-            if allocation_info.insertion_point == 1:
-                r_earliest_start_time = dispatchable_graph.get_time(task.task_id, "start")
-                earliest_start_time = self.timetable.ztp + timedelta(seconds=r_earliest_start_time)
-                bid.earliest_start_time = earliest_start_time
 
             bid.set_allocation_info(allocation_info)
             bid.set_stn(stn)

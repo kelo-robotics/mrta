@@ -80,12 +80,17 @@ class Auctioneer(SimulatorInterface):
 
     def process_round_result(self, round_result):
         self.winning_bid, self.tasks_to_allocate = round_result
-        if self.winning_bid.earliest_start_time is None or\
-                self.winning_bid.earliest_start_time and \
-                self.is_valid_time(self.winning_bid.earliest_start_time.to_datetime()):
+
+        earliest_departure_time_is_valid = \
+            self.is_valid_time(self.winning_bid.departure_time.earliest_time)
+
+        latest_departure_time_is_valid = \
+            self.is_valid_time(self.winning_bid.departure_time.latest_time)
+
+        if earliest_departure_time_is_valid or latest_departure_time_is_valid:
             self.send_task_contract(self.winning_bid.task_id, self.winning_bid.robot_id)
         else:
-            self.logger.warning("The earliest start time of task %s is invalid", self.winning_bid.task_id)
+            self.logger.warning("The departure time of task %s is invalid", self.winning_bid.task_id)
             self.finish_round()
 
     def process_alternative_timeslot(self, exception):
@@ -178,7 +183,7 @@ class Auctioneer(SimulatorInterface):
                            simulator=self.simulator)
 
         earliest_admissible_time = TimeStamp()
-        earliest_admissible_time.timestamp = self.get_current_time() + timedelta(minutes=1)
+        earliest_admissible_time.timestamp = self.get_current_time() + timedelta(seconds=10)
         task_announcement = TaskAnnouncement(tasks, self.round.id, self.timetable_manager.ztp, earliest_admissible_time)
 
         self.logger.debug("Starting round: %s", self.round.id)

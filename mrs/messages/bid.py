@@ -1,6 +1,6 @@
-from stn.task import Task as STNTask
-
+from fmlib.models.tasks import TimepointConstraint
 from mrs.utils.as_dict import AsDictMixin
+from stn.task import Task as STNTask
 
 
 class Metrics(AsDictMixin):
@@ -60,16 +60,17 @@ class NoBid(BidBase):
 
 
 class Bid(BidBase):
-    def __init__(self, task_id, robot_id, round_id, metrics, **kwargs):
+    def __init__(self, task_id, robot_id, round_id, metrics, departure_time, **kwargs):
         self.metrics = metrics
         self._allocation_info = None
-        self.earliest_start_time = kwargs.get("earliest_start_time")
+        self.departure_time = departure_time
         self.alternative_start_time = kwargs.get("alternative_start_time")
         super().__init__(task_id, robot_id, round_id)
 
     def __str__(self):
         to_print = ""
         to_print += "Bid (task: {}, robot: {}, metrics: {}".format(self.task_id, self.robot_id, self.metrics)
+        to_print += " departure_time: {}".format(self.departure_time)
         if self.alternative_start_time:
             to_print += " alternative_start_time: {}".format(self.alternative_start_time)
         else:
@@ -106,6 +107,7 @@ class Bid(BidBase):
     def to_attrs(cls, dict_repr):
         attrs = super().to_attrs(dict_repr)
         attrs.update(metrics=Metrics.from_dict(dict_repr.get("metrics")))
+        attrs.update(departure_time=TimepointConstraint.from_payload(dict_repr.get("departure_time")))
         return attrs
 
 
