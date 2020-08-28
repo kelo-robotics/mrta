@@ -341,6 +341,7 @@ class TimetableMonitor(TimetableMonitorBase):
         self.logger.info("Re-allocating task %s", task.task_id)
         self.remove_task(task, TaskStatusConst.UNALLOCATED)
         task.unassign_robots()
+        self.tasks[task.task_id] = task
         self.auctioneer.allocated_tasks.pop(task.task_id)
         self.auctioneer.allocate(task)
         self.tasks_to_reallocate.append(task)

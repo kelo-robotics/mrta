@@ -18,10 +18,10 @@ simulator:
 
 fleet:
   - robot_001
-  - robot_002
-  - robot_003
-  - robot_004
-  - robot_005
+#  - robot_002
+#  - robot_003
+#  - robot_004
+#  - robot_005
 
 allocation_method: tessi-srea
 
@@ -48,7 +48,7 @@ bidder:
 
 executor:
   max_seed: 2147483647
-  map_name: brsu
+  map_name: brsu_obstacles
 
 scheduler:
   time_resolution: 0.5 # minutes
