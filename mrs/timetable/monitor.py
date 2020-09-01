@@ -43,8 +43,6 @@ class TimetableMonitorBase:
         self.process_task_status(task_status, timestamp)
 
     def process_task_status(self, task_status, timestamp):
-        self.logger.debug("Processing task status %s for task %s by %s", task_status.task_status, task_status.task_id,
-                          task_status.robot_id)
         try:
             task = self.tasks.get(task_status.task_id)
             if task_status.task_status == TaskStatusConst.ONGOING:
@@ -246,7 +244,7 @@ class TimetableMonitor(TimetableMonitorBase):
         self.completed_tasks = list()
         self.deleting_task = False
         self.processing_task = False
-        self.logger = logging.getLogger("mrs.timetable.monitor")
+        self.logger.debug("Timetable monitor started")
 
     def task_status_cb(self, msg):
         while self.deleting_task:
@@ -256,7 +254,7 @@ class TimetableMonitor(TimetableMonitorBase):
         self.processing_task = False
 
     def process_task_status(self, task_status, timestamp):
-        self.logger.debug("Processing task status %s for task %s by %s", task_status.task_status, task_status.task_id,
+        self.logger.debug("Processing task status %s for task %s by robot %s", task_status.task_status, task_status.task_id,
                           task_status.robot_id)
         try:
             task = Task.get_task(task_status.task_id)
@@ -353,7 +351,7 @@ class TimetableMonitor(TimetableMonitorBase):
     def send_remove_task(self, task_id, status, robot_id):
         remove_task = RemoveTaskFromSchedule(task_id, status)
         msg = self.api.create_message(remove_task)
-        self.api.publish(msg, peer=robot_id + '_proxy')
+        self.api.publish(msg, peer=str(robot_id) + '_proxy')
 
     def run(self):
         # TODO: Check how this works outside simulation
@@ -380,9 +378,14 @@ class TimetableMonitorProxy(TimetableMonitorBase):
         super().__init__(**kwargs)
         self.robot_id = robot_id
         self.bidder = bidder
+        self.logger = logging.getLogger("mrs.proxy.timetable.monitor")
+        self.logger.debug("Timetable monitor started")
 
     def process_task_status(self, task_status, timestamp):
         if self.robot_id == task_status.robot_id:
+            self.logger.debug("Processing task status %s for task %s by robot %s", task_status.task_status,
+                              task_status.task_id,
+                              task_status.robot_id)
             super().process_task_status(task_status, timestamp)
 
     def remove_task_cb(self, msg):
