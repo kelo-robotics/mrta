@@ -58,6 +58,11 @@ class Auctioneer(SimulatorInterface):
         self.robot_ids.append(robot_id)
         self.timetable_manager.register_robot(robot_id)
 
+    def unregister_robot(self, robot_id):
+        self.logger.debug("Unregistering robot %s", robot_id)
+        self.robot_ids.remove(robot_id)
+        self.timetable_manager.unregister_robot(robot_id)
+
     def set_ztp(self, time_):
         self.timetable_manager.ztp = time_
 

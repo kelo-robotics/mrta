@@ -302,6 +302,9 @@ class TimetableManager(dict):
         self[robot_id] = timetable
         timetable.store()
 
+    def unregister_robot(self, robot_id):
+        self.pop(robot_id)
+
     def fetch_timetables(self):
         for robot_id, timetable in self.items():
             timetable.fetch()
