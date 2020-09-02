@@ -64,13 +64,15 @@ class ScheduleExecutionMonitor(TimetableMonitorBase):
 
             if task_status.task_status == TaskStatusConst.ONGOING:
                 self.update_timetable(task, task_status.robot_id, task_status.task_progress, timestamp)
+                self.tasks_status[task.task_id] = task_status.task_status
 
             if task_status.task_status == TaskStatusConst.COMPLETED:
                 self.logger.debug("Completing execution of task %s", task.task_id)
                 self.tasks.pop(task_status.task_id)
+                self.tasks_status.pop(task_status.task_id)
                 self.task = None
-
-            self.tasks_status[task.task_id] = task_status.task_status
+            else:
+                self.tasks_status[task.task_id] = task_status.task_status
 
     def schedule(self, task):
         try:
@@ -163,8 +165,11 @@ class ScheduleExecutionMonitor(TimetableMonitorBase):
 
     def process_task(self, task):
         task_status = self.tasks_status.get(task.task_id)
+        print("Process task: ", task.task_id)
+        print("Task status: ", task_status)
 
         if task_status == TaskStatusConst.DISPATCHED and self.timetable.has_task(task.task_id):
+            print("Schedule task")
             self.schedule(task)
 
         # For real-time execution add is_executable condition
