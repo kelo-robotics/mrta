@@ -3,7 +3,7 @@ import logging
 
 from fmlib.models.tasks import InterTimepointConstraint
 from pymodm.errors import DoesNotExist
-from ropod.structs.task import TaskStatus as TaskStatusConst
+from ropod.structs.status import TaskStatus as TaskStatusConst
 from stn.exceptions.stp import NoSTPSolution
 
 from mrs.allocation.bidding_rule import bidding_rule_factory

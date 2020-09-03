@@ -11,7 +11,7 @@ from mrs.messages.task_announcement import TaskAnnouncement
 from mrs.messages.task_contract import TaskContract, TaskContractAcknowledgment, TaskContractCancellation
 from mrs.simulation.simulator import SimulatorInterface
 from mrs.utils.time import to_timestamp
-from ropod.structs.task import TaskStatus as TaskStatusConst
+from ropod.structs.status import TaskStatus as TaskStatusConst
 from ropod.utils.timestamp import TimeStamp
 
 """ Implements a variation of the the TeSSI algorithm using the bidding_rule 

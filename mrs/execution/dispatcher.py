@@ -4,8 +4,7 @@ from datetime import timedelta
 
 from fmlib.models.actions import GoTo
 from mrs.simulation.simulator import SimulatorInterface
-from ropod.structs.task import TaskStatus as TaskStatusConst
-from fmlib.models.tasks import TransportationTask as Task
+from ropod.structs.status import TaskStatus as TaskStatusConst
 
 
 class Dispatcher(SimulatorInterface):
