@@ -1,7 +1,7 @@
 import copy
 import logging
 
-from fmlib.models.tasks import InterTimepointConstraint
+from fmlib.models.actions import Duration
 from pymodm.errors import DoesNotExist
 from ropod.structs.status import TaskStatus as TaskStatusConst
 from stn.exceptions.stp import NoSTPSolution
@@ -248,7 +248,7 @@ class Bidder:
             self.logger.warning("No planner configured")
             mean = 1
             variance = 0.1
-        travel_duration = InterTimepointConstraint(mean=mean, variance=variance)
+        travel_duration = Duration(mean=mean, variance=variance)
         self.logger.debug("Travel duration: %s", travel_duration)
         return travel_duration
 
