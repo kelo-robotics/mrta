@@ -50,7 +50,7 @@ class Round(SimulatorInterface):
 
         """
         open_time = self.get_current_time()
-        self.logger.debug("Round %s opened at %s and will close at %s",
+        self.logger.critical("Round %s opened at %s and will close at %s",
                           self.id, open_time, self.closure_time)
 
         self.finished = False
@@ -66,7 +66,8 @@ class Round(SimulatorInterface):
                                 bid.robot_id, self.id)
             return
 
-        self.logger.debug("Processing bid %s", bid)
+        self.logger.critical("Processing bid %s", bid)
+        self.logger.debug("Round %s will close at %s ", self.id, self.closure_time)
 
         if isinstance(bid, NoBid):
             self.received_no_bids[bid.task_id] = self.received_no_bids.get(bid.task_id, 0) + 1
@@ -83,8 +84,8 @@ class Round(SimulatorInterface):
 
         :return: boolean
         """
-        old_robot_id = int(old_bid.robot_id.split('_')[-1])
-        new_robot_id = int(new_bid.robot_id.split('_')[-1])
+        old_robot_id = int(old_bid.robot_id)
+        new_robot_id = int(new_bid.robot_id)
 
         if new_bid < old_bid or (new_bid == old_bid and new_robot_id < old_robot_id):
             return True
