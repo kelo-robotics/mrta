@@ -50,7 +50,7 @@ class Round(SimulatorInterface):
 
         """
         open_time = self.get_current_time()
-        self.logger.critical("Round %s opened at %s and will close at %s",
+        self.logger.debug("Round %s opened at %s and will close at %s",
                           self.id, open_time, self.closure_time)
 
         self.finished = False
@@ -66,7 +66,7 @@ class Round(SimulatorInterface):
                                 bid.robot_id, self.id)
             return
 
-        self.logger.critical("Processing bid %s", bid)
+        self.logger.debug("Processing bid %s", bid)
         self.logger.debug("Round %s will close at %s ", self.id, self.closure_time)
 
         if isinstance(bid, NoBid):

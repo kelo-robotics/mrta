@@ -2,15 +2,15 @@ import copy
 import logging
 
 from fmlib.models.actions import Duration
-from pymodm.errors import DoesNotExist
-from ropod.structs.status import TaskStatus as TaskStatusConst
-from stn.exceptions.stp import NoSTPSolution
-
 from mrs.allocation.bidding_rule import bidding_rule_factory
 from mrs.exceptions.allocation import TaskNotFound
 from mrs.messages.bid import NoBid, AllocationInfo
 from mrs.messages.task_announcement import TaskAnnouncement
 from mrs.messages.task_contract import TaskContract, TaskContractAcknowledgment, TaskContractCancellation
+from mrs.utils.time import relative_to_ztp
+from pymodm.errors import DoesNotExist
+from ropod.structs.status import TaskStatus as TaskStatusConst
+from stn.exceptions.stp import NoSTPSolution
 
 """ Implements a variation of the the TeSSI algorithm using the bidding_rule
 specified in the config file
@@ -121,11 +121,14 @@ class Bidder:
 
     def compute_bid(self, task, round_id, earliest_admissible_time):
         best_bid = None
-        n_tasks = len(self.timetable.get_tasks())
+        tasks = self.timetable.get_tasks()
 
-        # Insert task in each possible insertion_point of the stn
-        # Add from insertion_point 1 onwards (insertion_point 0 is reserved for the ztp)
-        for insertion_point in range(1, n_tasks+2):
+        insertion_points = self.get_insertion_points(task)
+        # Add insertion position after last task
+        insertion_points.append(len(tasks) + 1)
+        self.logger.debug("Insertion points: %s", insertion_points)
+
+        for insertion_point in insertion_points:
 
             prev_version_next_stn_task = None
 
@@ -152,6 +155,7 @@ class Bidder:
                 # Update previous location and start constraints of next task (if any)
                 next_task_id = self.timetable.get_task_id(insertion_point+1)
                 next_task = self.tasks.get(next_task_id)
+                self.logger.debug("Updating previous location and start constraints of task %s, ", next_task.task_id)
                 prev_version_next_stn_task = self.timetable.get_stn_task(next_task.task_id)
 
                 prev_location = self.get_previous_location(insertion_point+1)
@@ -198,6 +202,15 @@ class Bidder:
 
         return best_bid
 
+    def get_insertion_points(self, task):
+        """ Returns feasible insertion points, i.e. positions of tasks whose earliest and latest start times are within
+        the earliest and latest start times of the given task
+        """
+        r_earliest_time = relative_to_ztp(self.timetable.ztp, task.start_constraint.earliest_time)
+        r_latest_time = relative_to_ztp(self.timetable.ztp, task.start_constraint.latest_time)
+        insertion_points = self.timetable.get_insertion_points(r_earliest_time, r_latest_time)
+        return insertion_points
+
     def insert_in(self, insertion_point):
         try:
             task_id = self.timetable.get_task_id(insertion_point)
@@ -218,8 +231,7 @@ class Bidder:
                 pose = self.robot.position
                 previous_location = self.get_robot_location(pose)
             except DoesNotExist:
-                self.logger.warning("No information about robot's location")
-                previous_location = "AMK_D_L-1_C39"
+                self.logger.error("No information about robot's location")
         else:
             previous_task_id = self.timetable.get_task_id(insertion_point - 1)
             previous_task = self.tasks.get(previous_task_id)
@@ -253,10 +265,12 @@ class Bidder:
         return travel_duration
 
     def previous_task_is_frozen(self, insertion_point):
-        previous_task_id = self.timetable.get_task_id(insertion_point - 1)
-        task_status = self.tasks_status.get(previous_task_id)
-        if task_status in [TaskStatusConst.DISPATCHED, TaskStatusConst.ONGOING]:
-            return True
+        if insertion_point > 1:
+            previous_task_id = self.timetable.get_task_id(insertion_point - 1)
+            task_status = self.tasks_status.get(previous_task_id)
+            if task_status in [TaskStatusConst.DISPATCHED, TaskStatusConst.ONGOING]:
+                self.logger.debug("Previous task %s is frozen", previous_task_id)
+                return True
         return False
 
     @staticmethod
