@@ -190,7 +190,7 @@ class Auctioneer(SimulatorInterface):
                            simulator=self.simulator)
 
         earliest_admissible_time = TimeStamp()
-        earliest_admissible_time.timestamp = self.get_current_time() + timedelta(seconds=10)
+        earliest_admissible_time.timestamp = closure_time + timedelta(seconds=10)
         task_announcement = TaskAnnouncement(tasks, self.round.id, self.timetable_manager.ztp, earliest_admissible_time)
 
         self.logger.debug("Starting round: %s", self.round.id)
