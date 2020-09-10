@@ -68,6 +68,7 @@ class TimetableMonitorBase:
         if task_progress.action_id == first_action_id and \
                 task_progress.action_status.status == ActionStatusConst.ONGOING:
             node_id, node = timetable.stn.get_node_by_type(task.task_id, 'departure')
+            self.logger.debug("Updating timepoint: %s ", node.node_type)
             self._update_timepoint(task, timetable, r_assigned_time, node_id, task_progress)
             try:
                 self.performance_tracker.update_scheduling_metrics(task.task_id, timetable)
@@ -82,6 +83,7 @@ class TimetableMonitorBase:
                     task_progress.action_status.status == ActionStatusConst.ONGOING) or \
                         (node.node_type == 'finish' and
                          task_progress.action_status.status == ActionStatusConst.COMPLETED):
+                    self.logger.debug("Updating timepoint: %s ", node.node_type)
                     self._update_timepoint(task, timetable, r_assigned_time, node_id, task_progress)
 
     def _update_timepoint(self, task, timetable, r_assigned_time, node_id, task_progress, store=True):
