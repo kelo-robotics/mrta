@@ -268,7 +268,7 @@ class Bidder:
         if insertion_point > 1:
             previous_task_id = self.timetable.get_task_id(insertion_point - 1)
             task_status = self.tasks_status.get(previous_task_id)
-            if task_status in [TaskStatusConst.DISPATCHED, TaskStatusConst.ONGOING]:
+            if task_status in [TaskStatusConst.SCHEDULED, TaskStatusConst.DISPATCHED, TaskStatusConst.ONGOING]:
                 self.logger.debug("Previous task %s is frozen", previous_task_id)
                 return True
         return False
