@@ -23,7 +23,7 @@ class TaskProgress(AsDictMixin):
         self._timestamp = None
 
     def __str__(self):
-        return "{}:{}".format(self.action_type, self.action_status.status)
+        return "action_id {} ({}, {})".format(self.action_id, self.action_type, self.action_status.status)
 
     @property
     def timestamp(self):

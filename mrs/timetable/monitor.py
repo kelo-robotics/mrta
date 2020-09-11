@@ -60,31 +60,18 @@ class TimetableMonitorBase:
         if isinstance(task_progress, dict):
             task_progress = TaskProgress.from_dict(task_progress)
 
-        self.logger.debug("Updating timetable of robot: %s", robot_id)
+        self.logger.debug("Task progress: %s", task_progress)
         timetable = self.get_timetable(robot_id)
         r_assigned_time = relative_to_ztp(timetable.ztp, timestamp)
-        first_action_id = task.plan[0].actions[0].action_id
+        nodes = timetable.stn.get_nodes_by_action(task_progress.action_id)
+        action_status = task_progress.action_status.status
 
-        if task_progress.action_id == first_action_id and \
-                task_progress.action_status.status == ActionStatusConst.ONGOING:
-            node_id, node = timetable.stn.get_node_by_type(task.task_id, 'departure')
-            self.logger.debug("Updating timepoint: %s ", node.node_type)
-            self._update_timepoint(task, timetable, r_assigned_time, node_id, task_progress)
-            try:
-                self.performance_tracker.update_scheduling_metrics(task.task_id, timetable)
-            except AttributeError:
-                pass
-        else:
-            # An action could be associated to two nodes, e.g., between start and finish there is only one action
-            nodes = timetable.stn.get_nodes_by_action(task_progress.action_id)
-
-            for node_id, node in nodes:
-                if (node.node_type == 'start' and
-                    task_progress.action_status.status == ActionStatusConst.ONGOING) or \
-                        (node.node_type == 'finish' and
-                         task_progress.action_status.status == ActionStatusConst.COMPLETED):
-                    self.logger.debug("Updating timepoint: %s ", node.node_type)
-                    self._update_timepoint(task, timetable, r_assigned_time, node_id, task_progress)
+        for node_id, node in nodes:
+            if not node.is_executed and \
+                    ((node.node_type in ["departure", "start"] and action_status == ActionStatusConst.ONGOING) or
+                     (node.node_type == "finish" and action_status == ActionStatusConst.COMPLETED)):
+                self.logger.debug("Updating timepoint: %s", node.node_type)
+                self._update_timepoint(task, timetable, r_assigned_time, node_id, task_progress)
 
     def _update_timepoint(self, task, timetable, r_assigned_time, node_id, task_progress, store=True):
         timetable.update_timepoint(r_assigned_time, node_id)

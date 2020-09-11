@@ -96,6 +96,10 @@ class Timetable(STNInterface):
         self.dispatchable_graph.execute_edge(start_node_id, finish_node_id)
         self.dispatchable_graph.remove_old_timepoints()
 
+    def update_action_id(self, task_id, node_type, action_id):
+        node_id, node = self.stn.get_node_by_type(task_id, node_type)
+        node.action_id = action_id
+
     def get_tasks(self):
         """ Returns the tasks contained in the timetable
 
