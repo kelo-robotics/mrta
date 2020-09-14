@@ -3,6 +3,7 @@ from datetime import timedelta
 
 from fmlib.models.tasks import Task
 from mrs.allocation.round import Round
+from mrs.db.models.performance.task import TaskPerformance
 from mrs.exceptions.allocation import AlternativeTimeSlot
 from mrs.exceptions.allocation import InvalidAllocation
 from mrs.exceptions.allocation import NoAllocation
@@ -11,6 +12,7 @@ from mrs.messages.task_announcement import TaskAnnouncement
 from mrs.messages.task_contract import TaskContract, TaskContractAcknowledgment, TaskContractCancellation
 from mrs.simulation.simulator import SimulatorInterface
 from mrs.utils.time import to_timestamp
+from pymodm.errors import DoesNotExist
 from ropod.structs.status import TaskStatus as TaskStatusConst
 from ropod.utils.timestamp import TimeStamp
 
@@ -70,6 +72,7 @@ class Auctioneer(SimulatorInterface):
 
     def run(self):
         if self.tasks_to_allocate and self.round.finished:
+            self.check_tasks_validity()
             self.announce_tasks()
 
         if self.round.opened and self.round.time_to_close():
@@ -163,24 +166,10 @@ class Auctioneer(SimulatorInterface):
 
     def announce_tasks(self):
         tasks = list(self.tasks_to_allocate.values())
-        earliest_task = Task.get_earliest_task(tasks)
-        closure_time = earliest_task.start_constraint.earliest_time - self.closure_window
-
-        if not self.is_valid_time(closure_time) and self.alternative_timeslots:
-            # Closure window should be long enough to allow robots to bid (tune if necessary)
-            closure_time = self.get_current_time() + self.closure_window
-
-        elif not self.is_valid_time(closure_time) and not self.alternative_timeslots:
-            self.logger.warning("Task %s cannot not be allocated at its given temporal constraints",
-                                earliest_task.task_id)
-            earliest_task.update_status(TaskStatusConst.PREEMPTED)
-            self.tasks_to_allocate.pop(earliest_task.task_id)
-            return
+        self.logger.debug("Number of tasks to allocate: %s", len(tasks))
+        closure_time = self.get_closure_time(tasks)
 
         self.changed_timetable.clear()
-        for task in tasks:
-            if not task.hard_constraints:
-                self.update_soft_constraints(task)
 
         self.round = Round(self.robot_ids,
                            self.tasks_to_allocate,
@@ -189,12 +178,7 @@ class Auctioneer(SimulatorInterface):
                            alternative_timeslots=self.alternative_timeslots,
                            simulator=self.simulator)
 
-        earliest_admissible_time = TimeStamp()
-        earliest_admissible_time.timestamp = closure_time + timedelta(seconds=10)
-        task_announcement = TaskAnnouncement(tasks, self.round.id, self.timetable_manager.ztp, earliest_admissible_time)
-
-        self.logger.debug("Starting round: %s", self.round.id)
-        self.logger.debug("Number of tasks to allocate: %s", len(tasks))
+        task_announcement = TaskAnnouncement(tasks, self.round.id, self.timetable_manager.ztp, closure_time)
 
         msg = self.api.create_message(task_announcement)
 
@@ -202,6 +186,28 @@ class Auctioneer(SimulatorInterface):
 
         self.round.start()
         self.api.publish(msg, groups=['TASK-ALLOCATION'])
+
+    def check_tasks_validity(self):
+        tasks = list(self.tasks_to_allocate.values())
+        for task in tasks:
+            if not self.is_valid_time(task.start_constraint.latest_time):
+                if self.alternative_timeslots:
+                    task.hard_constraints = False
+                    self.logger.warning("Setting soft constraints for task %s", task.task_id)
+                else:
+                    self.logger.warning("Task %s cannot not be allocated at its given temporal constraints",
+                                        task.task_id)
+                    task.update_status(TaskStatusConst.PREEMPTED)
+                    self.tasks_to_allocate.pop(task.task_id)
+
+    def get_closure_time(self, tasks):
+        earliest_task = Task.get_earliest_task(tasks)
+        closure_time = earliest_task.start_constraint.earliest_time - self.closure_window
+        if not self.is_valid_time(closure_time):
+            # Closure window should be long enough to allow robots to bid (tune if necessary)
+            closure_time = self.get_current_time() + self.closure_window
+
+        return closure_time
 
     def update_soft_constraints(self, task):
         start_time_window = task.start_constraint.latest_time - task.start_constraint.earliest_time
@@ -249,6 +255,23 @@ class Auctioneer(SimulatorInterface):
         else:
             self.logger.warning("Round %s has to be repeated", self.round.id)
             self.finish_round()
+
+    def update_allocation_metrics(self, task):
+        """ Updates last's allocation performance metrics
+        """
+        allocation_time = self.allocation_times.pop(0)
+        self.logger.debug("Updating allocation metrics of task %s", task.task_id)
+        for robot_id in task.assigned_robots:
+            timetable = self.timetable_manager.get_timetable(robot_id)
+            try:
+                task_performance = TaskPerformance.get_task_performance(task.task_id)
+            except DoesNotExist:
+                task_performance = TaskPerformance.create_new(task_id=task.task_id)
+            metrics = {'time_to_allocate': allocation_time,
+                       'n_previously_allocated_tasks': len(timetable.get_tasks()) - 1}
+
+            task_performance.update_allocation(**metrics)
+            task_performance.allocated()
 
     def get_task_schedule(self, task_id, robot_id):
         """ Returns a dict
