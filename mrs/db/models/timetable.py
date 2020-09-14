@@ -19,7 +19,7 @@ TimetableManager = Manager.from_queryset(TimetableQuerySet)
 
 
 class Timetable(MongoModel):
-    robot_id = fields.CharField(primary_key=True)
+    robot_id = fields.IntegerField(primary_key=True)
     solver_name = fields.CharField()
     ztp = fields.DateTimeField()
     stn = fields.DictField()

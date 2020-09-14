@@ -56,7 +56,6 @@ class Bidder:
         payload = msg['payload']
         task_announcement = TaskAnnouncement.from_payload(payload)
         self.tasks.update({task.task_id: task for task in task_announcement.tasks})
-        self.tasks_status.update({task.task_id: TaskStatusConst.UNALLOCATED for task in task_announcement.tasks})
 
         self.logger.debug("Received TASK-ANNOUNCEMENT msg round %s with %s tasks", task_announcement.round_id,
                           len(task_announcement.tasks))
@@ -214,8 +213,8 @@ class Bidder:
     def insert_in(self, insertion_point):
         try:
             task_id = self.timetable.get_task_id(insertion_point)
-            task_status = self.tasks_status.get(task_id)
-            if task_status in [TaskStatusConst.DISPATCHED, TaskStatusConst.ONGOING]:
+            task = self.tasks.get(task_id)
+            if task.status.status in [TaskStatusConst.DISPATCHED, TaskStatusConst.ONGOING]:
                 self.logger.debug("Task %s was already dispatched "
                                   "Not computing bid for this insertion point %s", task_id, insertion_point)
                 return False
@@ -267,8 +266,8 @@ class Bidder:
     def previous_task_is_frozen(self, insertion_point):
         if insertion_point > 1:
             previous_task_id = self.timetable.get_task_id(insertion_point - 1)
-            task_status = self.tasks_status.get(previous_task_id)
-            if task_status in [TaskStatusConst.SCHEDULED, TaskStatusConst.DISPATCHED, TaskStatusConst.ONGOING]:
+            task = self.tasks.get(previous_task_id)
+            if task.status.status in [TaskStatusConst.SCHEDULED, TaskStatusConst.DISPATCHED, TaskStatusConst.ONGOING]:
                 self.logger.debug("Previous task %s is frozen", previous_task_id)
                 return True
         return False
@@ -315,9 +314,6 @@ class Bidder:
         tasks = [task for task in self.timetable.get_tasks()]
 
         self.logger.debug("Tasks allocated to robot %s:%s", self.robot_id, tasks)
-        task = self.tasks.get(task_id)
-        task.assign_robots([self.robot_id], save=False)
-        self.tasks_status[task.task_id] = TaskStatusConst.ALLOCATED
 
     def task_contract_cancellation_cb(self, msg):
         payload = msg['payload']

@@ -41,7 +41,7 @@ class TaskAnnouncement(AsDictMixin):
         for task_id, task_dict in attrs.get("tasks").items():
             task_type = task_dict.pop("_cls").split('.')[-1]
             task_cls = getattr(tasks, task_type)
-            tasks_.append(task_cls.from_payload(task_dict, save=False))
+            tasks_.append(task_cls.from_payload(task_dict, save_in_db=False))
         attrs.update(tasks=tasks_)
         return attrs
 

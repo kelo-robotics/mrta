@@ -79,7 +79,7 @@ class STNInterface:
             earliest_start_time = to_timestamp(self.ztp, r_earliest_start_time).to_datetime()
             latest_start_time = to_timestamp(self.ztp, r_latest_start_time).to_datetime()
 
-            task.update_start_constraint(earliest_start_time, latest_start_time, save=False)
+            task.update_start_constraint(earliest_start_time, latest_start_time, save_in_db=False)
 
         start_timepoint = Timepoint(name="start", r_earliest_time=r_earliest_start_time,
                                     r_latest_time=r_latest_start_time)

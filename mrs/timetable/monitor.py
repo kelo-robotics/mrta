@@ -43,15 +43,11 @@ class TimetableMonitorBase:
         self.process_task_status(task_status, timestamp)
 
     def process_task_status(self, task_status, timestamp):
-        try:
-            task = self.tasks.get(task_status.task_id)
-            if task_status.task_status == TaskStatusConst.ONGOING:
-                self.process_task_status_update(task, task_status, timestamp)
-                self.tasks_status[task.task_id] = task_status.task_status
-            if task_status.task_status == TaskStatusConst.COMPLETED:
-                self.process_task_status_update(task, task_status, timestamp)
-        except DoesNotExist:
-            self.logger.warning("Task %s does not exist", task_status.task_id)
+        task = self.tasks.get(task_status.task_id)
+        if task_status.task_status == TaskStatusConst.ONGOING:
+            self.process_task_status_update(task, task_status, timestamp)
+        if task_status.task_status == TaskStatusConst.COMPLETED:
+            self.process_task_status_update(task, task_status, timestamp)
 
     def process_task_status_update(self, task, task_status, timestamp):
         self.update_timetable(task, task_status.robot_id, task_status.task_progress, timestamp)
@@ -392,7 +388,6 @@ class TimetableMonitorProxy(TimetableMonitorBase):
             # TODO: The robot should send a ropod-pose msg and the robot proxy should update the robot pose
             if status == TaskStatusConst.COMPLETED:
                 self.update_robot_pose(task)
-            self.tasks_status[task.task_id] = status
             self.bidder.changed_timetable = True
             self._re_compute_dispatchable_graph(timetable, next_task)
         except (TaskNotFound, EmptyTimetable):
