@@ -21,7 +21,7 @@ specified in the config file
 
 class Auctioneer(SimulatorInterface):
 
-    def __init__(self, timetable_manager, closure_window=5, **kwargs):
+    def __init__(self, timetable_manager, closure_window=30, **kwargs):
         simulator = kwargs.get('simulator')
         super().__init__(simulator)
 
@@ -31,7 +31,7 @@ class Auctioneer(SimulatorInterface):
         self.robot_ids = list()
         self.timetable_manager = timetable_manager
 
-        self.closure_window = timedelta(minutes=closure_window)
+        self.closure_window = timedelta(seconds=closure_window)
         self.alternative_timeslots = kwargs.get('alternative_timeslots', False)
 
         self.logger.debug("Auctioneer started")
