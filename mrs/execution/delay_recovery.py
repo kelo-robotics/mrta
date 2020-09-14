@@ -54,14 +54,14 @@ class RecoveryMethod:
         estimated_duration = mean + 2 * round(variance ** 0.5, 3)
         self.logger.debug("Remaining estimated task duration: %s ", estimated_duration)
 
-        node_id, node = timetable.dispatchable_graph.get_node_by_type(next_task_id, 'start')
-        latest_start_time_next_task = timetable.dispatchable_graph.get_node_latest_time(node_id)
-        self.logger.debug("Latest permitted start time of next task: %s ", latest_start_time_next_task)
+        node_id, node = timetable.dispatchable_graph.get_node_by_type(next_task_id, 'departure')
+        latest_departure_time_next_task = timetable.dispatchable_graph.get_node_latest_time(node_id)
+        self.logger.debug("Latest permitted departure time of next task: %s ", latest_departure_time_next_task)
 
-        estimated_start_time_of_next_task = r_assigned_time + estimated_duration
-        self.logger.debug("Estimated start time of next task: %s ", estimated_start_time_of_next_task)
+        estimated_departure_time_of_next_task = r_assigned_time + estimated_duration
+        self.logger.debug("Estimated start time of next task: %s ", estimated_departure_time_of_next_task)
 
-        if estimated_start_time_of_next_task > latest_start_time_next_task:
+        if estimated_departure_time_of_next_task > latest_departure_time_next_task:
             self.logger.warning("Task %s is at risk", next_task_id)
             return True
         else:
