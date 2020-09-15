@@ -87,16 +87,17 @@ class Bidder:
         self.bid_placed = None
 
         for task in task_announcement.tasks:
-            self.logger.debug("Computing bid of task %s round %s", task.task_id, round_id)
-            best_bid = self.compute_bid(task, round_id, earliest_admissible_time)
+            if not task.request.eligible_robots or self.robot_id in task.request.eligible_robots:
+                self.logger.debug("Computing bid of task %s round %s", task.task_id, round_id)
+                best_bid = self.compute_bid(task, round_id, earliest_admissible_time)
 
-            if best_bid:
-                self.logger.debug("Best bid %s", best_bid)
-                bids.append(best_bid)
-            else:
-                self.logger.warning("No bid for task %s", task.task_id)
-                no_bid = NoBid(task.task_id, self.robot_id, round_id)
-                no_bids.append(no_bid)
+                if best_bid:
+                    self.logger.debug("Best bid %s", best_bid)
+                    bids.append(best_bid)
+                else:
+                    self.logger.warning("No bid for task %s", task.task_id)
+                    no_bid = NoBid(task.task_id, self.robot_id, round_id)
+                    no_bids.append(no_bid)
 
         smallest_bid = self.get_smallest_bid(bids)
 

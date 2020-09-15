@@ -75,8 +75,11 @@ class Auctioneer(SimulatorInterface):
 
     def run(self):
         if self.robot_ids and self.tasks_to_allocate and self.round.finished:
-            self.check_tasks_validity()
-            self.announce_tasks()
+            tasks = list(self.tasks_to_allocate.values())
+            self.check_tasks_validity(tasks)
+            tasks_to_announce = self.get_tasks_to_announce(tasks)
+            if tasks_to_announce:
+                self.announce_tasks(tasks_to_announce)
 
         if self.round.opened and self.round.time_to_close():
             try:
@@ -167,9 +170,7 @@ class Auctioneer(SimulatorInterface):
         self.logger.debug("Finishing round %s", self.round.id)
         self.round.finish()
 
-    def announce_tasks(self):
-        tasks = list(self.tasks_to_allocate.values())
-        self.logger.debug("Number of tasks to allocate: %s", len(tasks))
+    def announce_tasks(self, tasks):
         closure_time = self.get_closure_time(tasks)
 
         self.changed_timetable.clear()
@@ -190,8 +191,7 @@ class Auctioneer(SimulatorInterface):
         self.round.start()
         self.api.publish(msg, groups=['TASK-ALLOCATION'])
 
-    def check_tasks_validity(self):
-        tasks = list(self.tasks_to_allocate.values())
+    def check_tasks_validity(self, tasks):
         for task in tasks:
             if not self.is_valid_time(task.start_constraint.latest_time):
                 if self.alternative_timeslots:
@@ -202,6 +202,15 @@ class Auctioneer(SimulatorInterface):
                                         task.task_id)
                     task.update_status(TaskStatusConst.PREEMPTED)
                     self.tasks_to_allocate.pop(task.task_id)
+
+    def get_tasks_to_announce(self, tasks):
+        tasks_to_announce = list()
+        for task in tasks:
+            if not task.request.eligible_robots or \
+                    (task.request.eligible_robots and
+                     any(robot_id in task.request.eligible_robots for robot_id in self.robot_ids)):
+                tasks_to_announce.append(task)
+        return tasks_to_announce
 
     def get_closure_time(self, tasks):
         earliest_task = Task.get_earliest_task(tasks)
