@@ -63,8 +63,11 @@ class Auctioneer(SimulatorInterface):
     def unregister_robot(self, robot_id):
         self.logger.warning("Unregistering robot %s", robot_id)
         self.robot_ids.remove(robot_id)
-        timetable = self.timetable_manager.get_timetable(robot_id)
-        tasks_to_re_allocate = timetable.get_tasks()
+        allocated = Task.get_tasks(robot_id, TaskStatusConst.ALLOCATED)
+        scheduled = Task.get_tasks(robot_id, TaskStatusConst.SCHEDULED)
+        tasks_to_re_allocate = allocated + scheduled
+        self.logger.warning("The following tasks will be re-allocated: %s",
+                            [task.task_id for task in tasks_to_re_allocate])
         return tasks_to_re_allocate
 
     def set_ztp(self, time_):
