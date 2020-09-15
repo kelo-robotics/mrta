@@ -74,7 +74,7 @@ class Auctioneer(SimulatorInterface):
         self.timetable_manager.ztp = time_
 
     def run(self):
-        if self.tasks_to_allocate and self.round.finished:
+        if self.robot_ids and self.tasks_to_allocate and self.round.finished:
             self.check_tasks_validity()
             self.announce_tasks()
 
