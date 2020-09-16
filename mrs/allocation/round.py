@@ -10,6 +10,14 @@ from mrs.simulation.simulator import SimulatorInterface
 from ropod.utils.uuid import generate_uuid
 
 
+class RoundBidder:
+    def __init__(self, round_id):
+        self.round_id = round_id
+        self.bids = list()
+        self.no_bids = list()
+        self.bid_placed = None
+
+
 class Round(SimulatorInterface):
 
     def __init__(self, robot_ids, tasks_to_allocate, **kwargs):

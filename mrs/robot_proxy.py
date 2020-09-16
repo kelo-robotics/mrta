@@ -1,16 +1,16 @@
 import argparse
 import logging.config
+import time
 
-from fmlib.models.robot import Robot as RobotModel
 from fmlib.models import tasks
-from ropod.structs.status import TaskStatus as TaskStatusConst
-
+from fmlib.models.robot import Robot as RobotModel
 from mrs.allocation.bidder import Bidder
 from mrs.config.configurator import Configurator
 from mrs.config.params import get_config_params
 from mrs.simulation.simulator import Simulator
 from mrs.timetable.monitor import TimetableMonitorProxy
 from mrs.timetable.timetable import Timetable
+from ropod.structs.status import TaskStatus as TaskStatusConst
 
 _component_modules = {'simulator': Simulator,
                       'timetable': Timetable,
@@ -67,8 +67,8 @@ class RobotProxy:
         try:
             self.api.start()
             while True:
-                # time.sleep(0.1)
-                pass
+                time.sleep(0.1)
+                self.bidder.run()
         except (KeyboardInterrupt, SystemExit):
             self.logger.info("Terminating %s robot ...", self.robot_id)
             self.api.shutdown()
