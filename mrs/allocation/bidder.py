@@ -215,8 +215,8 @@ class Bidder:
         try:
             task_id = self.timetable.get_task_id(insertion_point)
             task = self.tasks.get(task_id)
-            if task.status.status in [TaskStatusConst.DISPATCHED, TaskStatusConst.ONGOING]:
-                self.logger.debug("Task %s was already dispatched "
+            if task.is_frozen():
+                self.logger.debug("Task %s is frozen "
                                   "Not computing bid for this insertion point %s", task_id, insertion_point)
                 return False
             return True
@@ -268,13 +268,12 @@ class Bidder:
         if insertion_point > 1:
             previous_task_id = self.timetable.get_task_id(insertion_point - 1)
             task = self.tasks.get(previous_task_id)
-            if task.status.status in [TaskStatusConst.SCHEDULED, TaskStatusConst.DISPATCHED, TaskStatusConst.ONGOING]:
+            if task.is_frozen():
                 self.logger.debug("Previous task %s is frozen", previous_task_id)
                 return True
         return False
 
-    @staticmethod
-    def get_smallest_bid(bids):
+    def get_smallest_bid(self, bids):
         """ Get the bid with the smallest cost among all bids.
 
         :param bids: list of bids
@@ -283,6 +282,16 @@ class Bidder:
         smallest_bid = None
 
         for bid in bids:
+
+            allocation_info = bid.get_allocation_info()
+            try:
+                task_id = self.timetable.get_task_id(allocation_info.insertion_point)
+                task = self.tasks.get(task_id)
+                if task.is_frozen():
+                    self.logger.debug("Bid %s is invalid", bid)
+                    continue
+            except TaskNotFound:
+                pass
 
             if smallest_bid is None or\
                     bid < smallest_bid or\
