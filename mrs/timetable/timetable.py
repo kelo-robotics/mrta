@@ -6,7 +6,7 @@ from datetime import timedelta
 from fmlib.models.tasks import TimepointConstraint
 from stn.stp import STP
 
-from mrs.db.models.timetable import Timetable as TimetableMongo
+from fmlib.models.timetable import Timetable as TimetableMongo
 from mrs.exceptions.allocation import InvalidAllocation
 from mrs.exceptions.allocation import TaskNotFound
 from mrs.exceptions.execution import InconsistentAssignment
@@ -345,4 +345,5 @@ class TimetableManager(dict):
 
         self.logger.debug("STN robot %s: %s", robot_id, timetable.stn)
         self.logger.debug("Dispatchable graph robot %s: %s", robot_id, timetable.dispatchable_graph)
+        return timetable
 

@@ -1,7 +1,7 @@
 from fmlib.models.robot import RobotManager as RobotPerformanceManager
 from pymodm import fields, MongoModel
 
-from mrs.db.models.timetable import Timetable
+from fmlib.models.timetable import Timetable
 
 
 class RobotPerformance(MongoModel):

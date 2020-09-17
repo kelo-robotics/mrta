@@ -1,7 +1,7 @@
 import logging
 from datetime import timedelta
 
-from fmlib.models.performance import TaskPerformance
+from fmlib.models.performance import TaskPerformance, RobotPerformance
 from fmlib.models.tasks import Task
 from mrs.allocation.round import Round
 from mrs.exceptions.allocation import AlternativeTimeSlot
@@ -124,9 +124,9 @@ class Auctioneer(SimulatorInterface):
     def process_allocation(self):
         task = self.tasks_to_allocate.pop(self.winning_bid.task_id)
         try:
-            self.timetable_manager.update_timetable(self.winning_bid.robot_id,
-                                                    self.winning_bid.get_allocation_info(),
-                                                    task)
+            timetable = self.timetable_manager.update_timetable(self.winning_bid.robot_id,
+                                                                self.winning_bid.get_allocation_info(),
+                                                                task)
         except InvalidAllocation as e:
             self.logger.warning("The allocation of task %s to robot %s is inconsistent. Aborting allocation."
                                 "Task %s will be included in next allocation round", e.task_id, e.robot_id, e.task_id)
@@ -140,11 +140,11 @@ class Auctioneer(SimulatorInterface):
         self.logger.debug("Allocation: %s", allocation)
         self.logger.debug("Tasks to allocate %s", [task_id for task_id, task in self.tasks_to_allocate.items()])
 
-        self.logger.debug("Updating task status to ALLOCATED")
-
         self.allocations.append(allocation)
         task_performance = TaskPerformance.get_task(self.winning_bid.task_id)
         task_performance.update_allocation(self.round.id, self.round.time_to_allocate)
+        robot_performance = RobotPerformance.get_robot(self.winning_bid.robot_id)
+        robot_performance.update_timetables(timetable)
         self.finish_round()
 
     def undo_allocation(self, allocation_info):
