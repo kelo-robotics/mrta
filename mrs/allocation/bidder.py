@@ -1,7 +1,9 @@
 import copy
 import logging
+import time
 
 from fmlib.models.actions import Duration
+from fmlib.models.performance import BidPerformance, TaskPerformance
 from mrs.allocation.bidding_rule import bidding_rule_factory
 from mrs.allocation.round import RoundBidder
 from mrs.exceptions.allocation import TaskNotFound
@@ -83,6 +85,7 @@ class Bidder:
                 self.send_bids(smallest_bid, self.round.no_bids)
 
     def compute_bid(self, task):
+        start_time = time.time()
         best_bid = None
         self.logger.debug("Computing bid of task %s round %s", task.task_id, self.round.round_id)
 
@@ -159,6 +162,15 @@ class Bidder:
 
             if prev_version_next_stn_task is not None:
                 self.timetable.stn.update_task(prev_version_next_stn_task)
+
+        end_time = time.time()
+
+        bid_performance = BidPerformance(round_id=self.round.round_id,
+                                         robot_id=self.robot_id,
+                                         insertion_points=insertion_points,
+                                         computation_time=end_time-start_time)
+        task_performance = TaskPerformance.get_task(task.task_id)
+        task_performance.update_bids(bid_performance)
 
         return best_bid
 

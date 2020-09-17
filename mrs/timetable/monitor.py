@@ -14,6 +14,7 @@ from mrs.messages.remove_task import RemoveTaskFromSchedule
 from mrs.messages.task_status import TaskStatus, TaskProgress
 from mrs.simulation.simulator import SimulatorInterface
 from mrs.utils.time import relative_to_ztp
+from fmlib.models.performance import TaskPerformance
 
 
 class TimetableMonitorBase:
@@ -266,23 +267,33 @@ class TimetableMonitor(TimetableMonitorBase):
 
     def _update_timepoint(self, task, timetable, r_assigned_time, node_id, task_progress, store=True):
         timetable.check_is_task_delayed(task, r_assigned_time, node_id)
-        try:
-            self.performance_tracker.update_delay(task.task_id, r_assigned_time, node_id, timetable)
-            self.performance_tracker.update_earliness(task.task_id, r_assigned_time, node_id, timetable)
-        except AttributeError:
-            pass
+        self.update_delay(task.task_id, r_assigned_time, node_id, timetable)
+        self.update_earliness(task.task_id, r_assigned_time, node_id, timetable)
         super()._update_timepoint(task, timetable, r_assigned_time, node_id, task_progress, store)
 
-        try:
-            self.performance_tracker.update_timetables(timetable)
-        except AttributeError:
-            pass
+        # TODO: Store timetables
         self.auctioneer.changed_timetable.append(timetable.robot_id)
 
         if self.d_graph_watchdog:
             next_task_id = timetable.get_next_task_id(task)
             next_task = Task.get_task(next_task_id)
             self._re_compute_dispatchable_graph(timetable, next_task)
+
+    def update_delay(self, task_id, r_assigned_time, node_id, timetable):
+        task_performance = TaskPerformance.get_task(task_id)
+        latest_time = timetable.dispatchable_graph.get_node_latest_time(node_id)
+        if r_assigned_time > latest_time:
+            self.logger.debug("Updating delay of task %s ", task_id)
+            delay = r_assigned_time - latest_time
+            task_performance.update_delay(delay)
+
+    def update_earliness(self, task_id, r_assigned_time, node_id, timetable):
+        task_performance = TaskPerformance.get_task(task_id)
+        earliest_time = timetable.dispatchable_graph.get_node_earliest_time(node_id)
+        if r_assigned_time < earliest_time:
+            self.logger.debug("Updating earliness of task %s ", task_id)
+            earliness = earliest_time - r_assigned_time
+            task_performance.update_earliness(earliness)
 
     def _re_compute_dispatchable_graph(self, timetable, next_task=None):
         try:

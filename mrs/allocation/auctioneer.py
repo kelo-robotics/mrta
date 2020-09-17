@@ -1,9 +1,9 @@
 import logging
 from datetime import timedelta
 
+from fmlib.models.performance import TaskPerformance
 from fmlib.models.tasks import Task
 from mrs.allocation.round import Round
-from mrs.db.models.performance.task import TaskPerformance
 from mrs.exceptions.allocation import AlternativeTimeSlot
 from mrs.exceptions.allocation import InvalidAllocation
 from mrs.exceptions.allocation import NoAllocation
@@ -12,9 +12,7 @@ from mrs.messages.task_announcement import TaskAnnouncement
 from mrs.messages.task_contract import TaskContract, TaskContractAcknowledgment, TaskContractCancellation
 from mrs.simulation.simulator import SimulatorInterface
 from mrs.utils.time import to_timestamp
-from pymodm.errors import DoesNotExist
 from ropod.structs.status import TaskStatus as TaskStatusConst
-from ropod.utils.timestamp import TimeStamp
 
 """ Implements a variation of the the TeSSI algorithm using the bidding_rule 
 specified in the config file
@@ -41,7 +39,6 @@ class Auctioneer(SimulatorInterface):
         self.tasks_to_allocate = dict()
         self.allocated_tasks = dict()
         self.allocations = list()
-        self.allocation_times = list()
         self.winning_bid = None
         self.changed_timetable = list()
         self.waiting_for_user_confirmation = list()
@@ -146,7 +143,8 @@ class Auctioneer(SimulatorInterface):
         self.logger.debug("Updating task status to ALLOCATED")
 
         self.allocations.append(allocation)
-        self.allocation_times.append(self.round.time_to_allocate)
+        task_performance = TaskPerformance.get_task(self.winning_bid.task_id)
+        task_performance.update_allocation(self.round.id, self.round.time_to_allocate)
         self.finish_round()
 
     def undo_allocation(self, allocation_info):
@@ -267,23 +265,6 @@ class Auctioneer(SimulatorInterface):
         else:
             self.logger.warning("Round %s has to be repeated", self.round.id)
             self.finish_round()
-
-    def update_allocation_metrics(self, task):
-        """ Updates last's allocation performance metrics
-        """
-        allocation_time = self.allocation_times.pop(0)
-        self.logger.debug("Updating allocation metrics of task %s", task.task_id)
-        for robot_id in task.assigned_robots:
-            timetable = self.timetable_manager.get_timetable(robot_id)
-            try:
-                task_performance = TaskPerformance.get_task_performance(task.task_id)
-            except DoesNotExist:
-                task_performance = TaskPerformance.create_new(task_id=task.task_id)
-            metrics = {'time_to_allocate': allocation_time,
-                       'n_previously_allocated_tasks': len(timetable.get_tasks()) - 1}
-
-            task_performance.update_allocation(**metrics)
-            task_performance.allocated()
 
     def get_task_schedule(self, task_id, robot_id):
         """ Returns a dict
