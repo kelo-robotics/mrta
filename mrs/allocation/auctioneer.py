@@ -143,7 +143,7 @@ class Auctioneer(SimulatorInterface):
         self.allocations.append(allocation)
         task_performance = TaskPerformance.get_task(self.winning_bid.task_id)
         task_performance.update_allocation(self.round.id, self.round.time_to_allocate)
-        robot_performance = RobotPerformance.get_robot(self.winning_bid.robot_id)
+        robot_performance = RobotPerformance.get_robot(self.winning_bid.robot_id, api=self.api)
         robot_performance.update_timetables(timetable)
         self.finish_round()
 

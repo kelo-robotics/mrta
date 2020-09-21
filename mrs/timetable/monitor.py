@@ -272,7 +272,7 @@ class TimetableMonitor(TimetableMonitorBase):
         self.update_earliness(task_performance, r_assigned_time, node_id, timetable)
         super()._update_timepoint(task, timetable, r_assigned_time, node_id, task_progress, store)
 
-        robot_performance = RobotPerformance.get_robot(timetable.robot_id)
+        robot_performance = RobotPerformance.get_robot(timetable.robot_id, api=self.api)
         robot_performance.update_timetables(timetable)
         self.auctioneer.changed_timetable.append(timetable.robot_id)
 
