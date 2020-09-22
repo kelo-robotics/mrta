@@ -28,7 +28,7 @@ class Auctioneer(SimulatorInterface):
         self.logger = logging.getLogger("mrs.auctioneer")
         self.api = kwargs.get('api')
         self.ccu_store = kwargs.get('ccu_store')
-        self.robot_ids = list()
+        self.robots = dict()
         self.timetable_manager = timetable_manager
 
         self.closure_window = timedelta(seconds=closure_window)
@@ -42,7 +42,7 @@ class Auctioneer(SimulatorInterface):
         self.winning_bid = None
         self.changed_timetable = list()
         self.waiting_for_user_confirmation = list()
-        self.round = Round(self.robot_ids, self.tasks_to_allocate)
+        self.round = Round(list(), self.tasks_to_allocate)
 
     def configure(self, **kwargs):
         api = kwargs.get('api')
@@ -52,16 +52,16 @@ class Auctioneer(SimulatorInterface):
         if ccu_store:
             self.ccu_store = ccu_store
 
-    def register_robot(self, robot_id):
-        self.logger.debug("Registering robot %s", robot_id)
-        self.robot_ids.append(robot_id)
-        self.timetable_manager.register_robot(robot_id)
+    def register_robot(self, robot):
+        self.logger.debug("Registering robot %s", robot.robot_id)
+        self.robots[robot.robot_id] = robot
+        self.timetable_manager.register_robot(robot.robot_id)
 
-    def unregister_robot(self, robot_id):
-        self.logger.warning("Unregistering robot %s", robot_id)
-        self.robot_ids.remove(robot_id)
-        allocated = Task.get_tasks(robot_id, TaskStatusConst.ALLOCATED)
-        scheduled = Task.get_tasks(robot_id, TaskStatusConst.SCHEDULED)
+    def unregister_robot(self, robot):
+        self.logger.warning("Unregistering robot %s", robot.robot_id)
+        self.robots.pop(robot.robot_id)
+        allocated = Task.get_tasks(robot.robot_id, TaskStatusConst.ALLOCATED)
+        scheduled = Task.get_tasks(robot.robot_id, TaskStatusConst.SCHEDULED)
         tasks_to_re_allocate = allocated + scheduled
         self.logger.warning("The following tasks will be re-allocated: %s",
                             [task.task_id for task in tasks_to_re_allocate])
@@ -71,7 +71,7 @@ class Auctioneer(SimulatorInterface):
         self.timetable_manager.ztp = time_
 
     def run(self):
-        if self.robot_ids and self.tasks_to_allocate and self.round.finished:
+        if self.robots and self.tasks_to_allocate and self.round.finished:
             tasks = list(self.tasks_to_allocate.values())
             self.check_tasks_validity(tasks)
             tasks_to_announce = self.get_tasks_to_announce(tasks)
@@ -173,7 +173,7 @@ class Auctioneer(SimulatorInterface):
 
         self.changed_timetable.clear()
 
-        self.round = Round(self.robot_ids,
+        self.round = Round(list(self.robots.keys()),
                            self.tasks_to_allocate,
                            n_tasks=len(tasks),
                            closure_time=closure_time,
@@ -206,8 +206,20 @@ class Auctioneer(SimulatorInterface):
         for task in tasks:
             if not task.request.eligible_robots or \
                     (task.request.eligible_robots and
-                     any(robot_id in task.request.eligible_robots for robot_id in self.robot_ids)):
-                tasks_to_announce.append(task)
+                     any(robot_id in task.request.eligible_robots for robot_id in self.robots.keys())):
+
+                for robot_id, robot in self.robots.items():
+                    if all(i in robot.capabilities for i in task.capabilities) and task not in tasks_to_announce:
+                        tasks_to_announce.append(task)
+
+                if not tasks_to_announce:
+                    self.logger.warning("None of the robots has the capabilities required by the task."
+                                        "Task %s is not announced.", task.task_id)
+
+            else:
+                self.logger.warning("None of the eligible_robots in the task-request are available." 
+                                    "Task %s is not announced.", task.task_id)
+
         return tasks_to_announce
 
     def get_closure_time(self, tasks):
