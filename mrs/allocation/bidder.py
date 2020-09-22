@@ -45,6 +45,7 @@ class Bidder:
         self.task_announcement = None
         self.round = None
         self.changed_timetable = False
+        self.capabilities = list()
 
         self.logger = logging.getLogger('mrs.bidder.%s' % self.robot_id)
         self.logger.debug("Bidder initialized %s", self.robot_id)
@@ -69,7 +70,8 @@ class Bidder:
                 task = self.task_announcement.tasks.pop(0)
                 if self.round is None:
                     self.round = RoundBidder(self.task_announcement.round_id)
-                if not task.request.eligible_robots or self.robot_id in task.request.eligible_robots:
+                if all(i in self.capabilities for i in task.capabilities) and \
+                        not task.request.eligible_robots or self.robot_id in task.request.eligible_robots:
                     bid = self.compute_bid(task)
                     if bid is not None:
                         self.logger.debug("Best bid %s", bid)
@@ -87,7 +89,7 @@ class Bidder:
     def compute_bid(self, task):
         start_time = time.time()
         best_bid = None
-        self.logger.debug("Computing bid of task %s round %s", task.task_id, self.round.round_id)
+        self.logger.debug("Computing bid for task %s round %s", task.task_id, self.round.round_id)
 
         insertion_points = self.get_insertion_points(task)
         self.logger.debug("Insertion points: %s", insertion_points)
@@ -95,7 +97,7 @@ class Bidder:
         for insertion_point in insertion_points:
             prev_version_next_stn_task = None
 
-            self.logger.debug("Computing bid of task %s in insertion_point %s", task.task_id, insertion_point)
+            self.logger.debug("Computing bid for task %s in insertion_point %s", task.task_id, insertion_point)
             if not self.insert_in(insertion_point):
                 continue
 
