@@ -28,7 +28,6 @@ class Round(SimulatorInterface):
         self.eligible_robots = eligible_robots
         self.tasks_to_allocate = tasks_to_allocate
 
-        self.n_tasks = kwargs.get('n_tasks')
         self.closure_time = kwargs.get('closure_time')
         self.alternative_timeslots = kwargs.get('alternative_timeslots', False)
         self.id = generate_uuid()

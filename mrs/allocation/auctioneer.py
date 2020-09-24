@@ -195,24 +195,20 @@ class Auctioneer(SimulatorInterface):
         if not tasks_to_announce:
             return
 
-        closure_time = self.get_closure_time(tasks_to_announce)
-
+        closure_time = self.get_current_time() + self.closure_window
         self.changed_timetable.clear()
 
         self.round = Round(eligible_robots,
                            self.tasks_to_allocate,
-                           n_tasks=len(tasks),
                            closure_time=closure_time,
                            alternative_timeslots=self.alternative_timeslots,
                            simulator=self.simulator)
 
         self.logger.debug("Auctioneer announces tasks %s", [task.task_id for task in tasks_to_announce])
-        self.logger.debug("Eligible robots: %s", eligible_robots.keys())
+        self.logger.debug("Eligible robots: %s", list(eligible_robots.keys()))
 
         task_announcement = TaskAnnouncement(tasks_to_announce, self.round.id, self.timetable_manager.ztp, closure_time)
-
         msg = self.api.create_message(task_announcement)
-
         self.round.start()
         self.api.publish(msg, groups=['TASK-ALLOCATION'])
 

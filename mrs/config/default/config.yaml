@@ -35,7 +35,7 @@ delay_recovery:
 d_graph_watchdog: False
 
 auctioneer:
-  closure_window: 1 # minutes
+  closure_window: 30 # seconds
   alternative_timeslots: False
 
 dispatcher:
