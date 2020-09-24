@@ -8,6 +8,7 @@ from mrs.exceptions.allocation import AlternativeTimeSlot
 from mrs.exceptions.allocation import InvalidAllocation
 from mrs.exceptions.allocation import NoAllocation
 from mrs.messages.bid import Bid, NoBid
+from mrs.messages.bid import EligibleRobot
 from mrs.messages.task_announcement import TaskAnnouncement
 from mrs.messages.task_contract import TaskContract, TaskContractAcknowledgment, TaskContractCancellation
 from mrs.simulation.simulator import SimulatorInterface
@@ -71,12 +72,14 @@ class Auctioneer(SimulatorInterface):
         self.timetable_manager.ztp = time_
 
     def run(self):
-        if self.robots and self.tasks_to_allocate and self.round.finished:
+        if self.tasks_to_allocate and self.round.finished:
+            if not self.robots:
+                self.logger.warning("There are no robots registered on the FMS."
+                                    "Do not announcing tasks for allocation.")
+                return
+
             tasks = list(self.tasks_to_allocate.values())
-            self.check_tasks_validity(tasks)
-            tasks_to_announce = self.get_tasks_to_announce(tasks)
-            if tasks_to_announce:
-                self.announce_tasks(tasks_to_announce)
+            self.announce_tasks(tasks)
 
         if self.round.opened and self.round.time_to_close():
             try:
@@ -169,58 +172,73 @@ class Auctioneer(SimulatorInterface):
         self.round.finish()
 
     def announce_tasks(self, tasks):
-        closure_time = self.get_closure_time(tasks)
+        tasks_to_announce = list()
+        eligible_robots = dict()
 
+        for task in tasks:
+            self.check_task_validity(task)
+            eligible_robots_for_task = self.get_eligible_robots(task)
+
+            if not eligible_robots_for_task:
+                self.logger.warning("No eligible robots for task. "
+                                    "Task %s is not announced.", task.task_id)
+                continue
+
+            for robot_id in eligible_robots_for_task:
+                if robot_id not in eligible_robots:
+                    eligible_robots[robot_id] = EligibleRobot(robot_id)
+                eligible_robots[robot_id].add_task(task.task_id)
+
+                if task not in tasks_to_announce:
+                    tasks_to_announce.append(task)
+
+        if not tasks_to_announce:
+            return
+
+        closure_time = self.get_current_time() + self.closure_window
         self.changed_timetable.clear()
 
-        self.round = Round(list(self.robots.keys()),
+        self.round = Round(eligible_robots,
                            self.tasks_to_allocate,
-                           n_tasks=len(tasks),
                            closure_time=closure_time,
                            alternative_timeslots=self.alternative_timeslots,
                            simulator=self.simulator)
 
-        task_announcement = TaskAnnouncement(tasks, self.round.id, self.timetable_manager.ztp, closure_time)
+        self.logger.debug("Auctioneer announces tasks %s", [task.task_id for task in tasks_to_announce])
+        self.logger.debug("Eligible robots: %s", list(eligible_robots.keys()))
 
+        task_announcement = TaskAnnouncement(tasks_to_announce, self.round.id, self.timetable_manager.ztp, closure_time)
         msg = self.api.create_message(task_announcement)
-
-        self.logger.debug("Auctioneer announces tasks %s", [task.task_id for task in tasks])
-
         self.round.start()
         self.api.publish(msg, groups=['TASK-ALLOCATION'])
 
-    def check_tasks_validity(self, tasks):
-        for task in tasks:
-            if not self.is_valid_time(task.start_constraint.latest_time):
-                if self.alternative_timeslots:
-                    task.hard_constraints = False
-                    self.logger.warning("Setting soft constraints for task %s", task.task_id)
-                else:
-                    self.logger.warning("Task %s cannot not be allocated at its given temporal constraints",
-                                        task.task_id)
-                    task.update_status(TaskStatusConst.PREEMPTED)
-                    self.tasks_to_allocate.pop(task.task_id)
+    def get_eligible_robots(self, task):
+        capable_robots = self.get_capable_robots(task)
+        if task.request.eligible_robots:
+            eligible_robots = [robot_id for robot_id in capable_robots if robot_id in task.request.eligible_robots]
+        else:
+            eligible_robots = capable_robots
+        self.logger.debug("Eligible robots for task %s: %s", task.task_id, eligible_robots)
+        return eligible_robots
 
-    def get_tasks_to_announce(self, tasks):
-        tasks_to_announce = list()
-        for task in tasks:
-            if not task.request.eligible_robots or \
-                    (task.request.eligible_robots and
-                     any(robot_id in task.request.eligible_robots for robot_id in self.robots.keys())):
+    def get_capable_robots(self, task):
+        capable_robots = list()
+        for robot_id, robot in self.robots.items():
+            if all(i in robot.capabilities for i in task.capabilities):
+                capable_robots.append(robot_id)
+        self.logger.debug("Capable robots for task %s: %s", task.task_id, capable_robots)
+        return capable_robots
 
-                for robot_id, robot in self.robots.items():
-                    if all(i in robot.capabilities for i in task.capabilities) and task not in tasks_to_announce:
-                        tasks_to_announce.append(task)
-
-                if not tasks_to_announce:
-                    self.logger.warning("None of the robots has the capabilities required by the task."
-                                        "Task %s is not announced.", task.task_id)
-
+    def check_task_validity(self, task):
+        if not self.is_valid_time(task.start_constraint.latest_time):
+            if self.alternative_timeslots:
+                task.hard_constraints = False
+                self.logger.warning("Setting soft constraints for task %s", task.task_id)
             else:
-                self.logger.warning("None of the eligible_robots in the task-request are available." 
-                                    "Task %s is not announced.", task.task_id)
-
-        return tasks_to_announce
+                self.logger.warning("Task %s cannot not be allocated at its given temporal constraints",
+                                    task.task_id)
+                task.update_status(TaskStatusConst.PREEMPTED)
+                self.tasks_to_allocate.pop(task.task_id)
 
     def get_closure_time(self, tasks):
         earliest_task = Task.get_earliest_task(tasks)

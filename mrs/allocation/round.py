@@ -5,7 +5,7 @@ from datetime import datetime
 
 from mrs.exceptions.allocation import AlternativeTimeSlot
 from mrs.exceptions.allocation import NoAllocation
-from mrs.messages.bid import NoBid, BiddingRobot
+from mrs.messages.bid import NoBid
 from mrs.simulation.simulator import SimulatorInterface
 from ropod.utils.uuid import generate_uuid
 
@@ -20,15 +20,14 @@ class RoundBidder:
 
 class Round(SimulatorInterface):
 
-    def __init__(self, robot_ids, tasks_to_allocate, **kwargs):
+    def __init__(self, eligible_robots, tasks_to_allocate, **kwargs):
         simulator = kwargs.get('simulator')
         super().__init__(simulator)
 
         self.logger = logging.getLogger('mrs.auctioneer.round')
-        self.robot_ids = robot_ids
+        self.eligible_robots = eligible_robots
         self.tasks_to_allocate = tasks_to_allocate
 
-        self.n_tasks = kwargs.get('n_tasks')
         self.closure_time = kwargs.get('closure_time')
         self.alternative_timeslots = kwargs.get('alternative_timeslots', False)
         self.id = generate_uuid()
@@ -37,7 +36,6 @@ class Round(SimulatorInterface):
         self.opened = False
         self.received_bids = dict()
         self.received_no_bids = dict()
-        self.bidding_robots = {robot_id: BiddingRobot(robot_id) for robot_id in self.robot_ids}
         self.start_time = datetime.now().timestamp()
         self.time_to_allocate = None
 
@@ -84,7 +82,7 @@ class Round(SimulatorInterface):
                     self.update_task_bid(bid, self.received_bids[bid.task_id]):
                 self.received_bids[bid.task_id] = bid
 
-        self.bidding_robots[bid.robot_id].update(bid)
+        self.eligible_robots[bid.robot_id].update(bid)
 
     @staticmethod
     def update_task_bid(new_bid, old_bid):
@@ -102,11 +100,11 @@ class Round(SimulatorInterface):
 
     def all_robots_placed_bid(self):
         bidding_robots = 0
-        for robot_id, bidding_robot in self.bidding_robots.items():
-            if bidding_robot.placed_bid(self.n_tasks):
+        for robot_id, eligible_robot in self.eligible_robots.items():
+            if eligible_robot.placed_bid():
                 bidding_robots += 1
 
-        if bidding_robots == len(self.robot_ids):
+        if bidding_robots == len(self.eligible_robots):
             return True
         return False
 

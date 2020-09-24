@@ -155,9 +155,10 @@ class AllocationInfo(AsDictMixin):
         return attrs
 
 
-class BiddingRobot:
+class EligibleRobot:
     def __init__(self, robot_id):
         self.robot_id = robot_id
+        self.tasks = list()  # tasks for which the robot can place a bid
         self.bids = list()
         self.no_bids = list()
 
@@ -166,13 +167,16 @@ class BiddingRobot:
         to_print += "{}, bids: {}, no_bids:{}".format(self.robot_id, self.bids, self.no_bids)
         return to_print
 
+    def add_task(self, task):
+        self.tasks.append(task)
+
     def update(self, bid):
         if isinstance(bid, NoBid):
             self.no_bids.append(bid)
         else:
             self.bids.append(bid)
 
-    def placed_bid(self, n_tasks):
-        if len(self.bids) == 1 or len(self.no_bids) == n_tasks:
+    def placed_bid(self):
+        if len(self.bids) == 1 or len(self.no_bids) == len(self.tasks):
             return True
         return False
