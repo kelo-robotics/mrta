@@ -28,9 +28,9 @@ class STNInterface:
     def update_task(self, stn_task):
         self.stn.update_task(stn_task)
 
-    def to_stn_task(self, task, travel_duration, insertion_point, earliest_admissible_time, previous_task_is_frozen):
-        travel_edge = Edge(name="travel_time", mean=travel_duration.mean, variance=travel_duration.variance)
-        duration_edge = Edge(name="work_time", mean=task.duration.mean, variance=task.duration.variance)
+    def to_stn_task(self, task, travel_time, insertion_point, earliest_admissible_time, previous_task_is_frozen):
+        travel_edge = Edge(name="travel_time", mean=travel_time.mean, variance=travel_time.variance)
+        duration_edge = Edge(name="work_time", mean=task.work_time.mean, variance=task.work_time.variance)
 
         start_timepoint = self.get_start_timepoint(task, travel_edge, insertion_point)
         departure_timepoint = self.get_departure_timepoint(start_timepoint, travel_edge, insertion_point, earliest_admissible_time,
@@ -45,8 +45,8 @@ class STNInterface:
         stn_task = STNTask(task.task_id, timepoints, edges, start_action_id, finish_action_id)
         return stn_task
 
-    def update_stn_task(self, stn_task, travel_duration, insertion_point, earliest_admissible_time, previous_task_is_frozen):
-        travel_edge = Edge(name="travel_time", mean=travel_duration.mean, variance=travel_duration.variance)
+    def update_stn_task(self, stn_task, travel_time, insertion_point, earliest_admissible_time, previous_task_is_frozen):
+        travel_edge = Edge(name="travel_time", mean=travel_time.mean, variance=travel_time.variance)
         start_timepoint = stn_task.get_timepoint("start")
         departure_timepoint = self.get_departure_timepoint(start_timepoint, travel_edge, insertion_point, earliest_admissible_time,
                                                    previous_task_is_frozen)
