@@ -8,6 +8,7 @@ from mrs.exceptions.allocation import AlternativeTimeSlot
 from mrs.exceptions.allocation import InvalidAllocation
 from mrs.exceptions.allocation import NoAllocation
 from mrs.messages.bid import Bid, NoBid
+from mrs.messages.bid import EligibleRobot
 from mrs.messages.task_announcement import TaskAnnouncement
 from mrs.messages.task_contract import TaskContract, TaskContractAcknowledgment, TaskContractCancellation
 from mrs.simulation.simulator import SimulatorInterface
@@ -172,22 +173,29 @@ class Auctioneer(SimulatorInterface):
 
     def announce_tasks(self, tasks):
         tasks_to_announce = list()
-        eligible_robots = list()
+        eligible_robots = dict()
+
         for task in tasks:
             self.check_task_validity(task)
             eligible_robots_for_task = self.get_eligible_robots(task)
-            if eligible_robots_for_task:
-                eligible_robots.extend([robot_id for robot_id in eligible_robots_for_task
-                                        if robot_id not in eligible_robots])
-                if task not in tasks_to_announce:
-                    tasks_to_announce.append(task)
-            else:
+
+            if not eligible_robots_for_task:
                 self.logger.warning("No eligible robots for task. "
                                     "Task %s is not announced.", task.task_id)
+                continue
+
+            for robot_id in eligible_robots_for_task:
+                if robot_id not in eligible_robots:
+                    eligible_robots[robot_id] = EligibleRobot(robot_id)
+                eligible_robots[robot_id].add_task(task.task_id)
+
+                if task not in tasks_to_announce:
+                    tasks_to_announce.append(task)
+
         if not tasks_to_announce:
             return
 
-        closure_time = self.get_closure_time(tasks)
+        closure_time = self.get_closure_time(tasks_to_announce)
 
         self.changed_timetable.clear()
 
@@ -199,7 +207,7 @@ class Auctioneer(SimulatorInterface):
                            simulator=self.simulator)
 
         self.logger.debug("Auctioneer announces tasks %s", [task.task_id for task in tasks_to_announce])
-        self.logger.debug("Eligible robots: %s", eligible_robots)
+        self.logger.debug("Eligible robots: %s", eligible_robots.keys())
 
         task_announcement = TaskAnnouncement(tasks_to_announce, self.round.id, self.timetable_manager.ztp, closure_time)
 
