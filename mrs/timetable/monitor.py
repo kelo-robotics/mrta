@@ -131,7 +131,7 @@ class TimetableMonitorBase:
                              "finish_time": timestamp}
             task.update_schedule(task_schedule)
 
-    def _re_compute_dispatchable_graph(self, timetable, next_task=None):
+    def re_compute_dispatchable_graph(self, timetable, next_task=None):
         """ Recomputes the timetable's dispatchable graph.
 
         Args:
@@ -279,7 +279,7 @@ class TimetableMonitor(TimetableMonitorBase):
         if self.d_graph_watchdog:
             next_task_id = timetable.get_next_task_id(task)
             next_task = Task.get_task(next_task_id)
-            self._re_compute_dispatchable_graph(timetable, next_task)
+            self.re_compute_dispatchable_graph(timetable, next_task)
 
     def update_delay(self, task_performance, r_assigned_time, node_id, timetable):
         latest_time = timetable.dispatchable_graph.get_node_latest_time(node_id)
@@ -295,9 +295,9 @@ class TimetableMonitor(TimetableMonitorBase):
             earliness = earliest_time - r_assigned_time
             task_performance.update_earliness(earliness)
 
-    def _re_compute_dispatchable_graph(self, timetable, next_task=None):
+    def re_compute_dispatchable_graph(self, timetable, next_task=None):
         try:
-            successful_recomputation = super()._re_compute_dispatchable_graph(timetable)
+            successful_recomputation = super().re_compute_dispatchable_graph(timetable)
             if successful_recomputation:
                 self.auctioneer.changed_timetable.append(timetable.robot_id)
             elif not successful_recomputation and next_task:
@@ -327,7 +327,7 @@ class TimetableMonitor(TimetableMonitorBase):
                 task.update_status(status)
                 self.auctioneer.changed_timetable.append(timetable.robot_id)
                 self.send_remove_task(task.task_id, status, robot_id)
-                self._re_compute_dispatchable_graph(timetable, next_task)
+                self.re_compute_dispatchable_graph(timetable, next_task)
             except (TaskNotFound, EmptyTimetable):
                 return
 
@@ -400,7 +400,7 @@ class TimetableMonitorProxy(TimetableMonitorBase):
             if status == TaskStatusConst.COMPLETED:
                 self.update_robot_pose(task)
             self.bidder.changed_timetable = True
-            self._re_compute_dispatchable_graph(timetable, next_task)
+            self.re_compute_dispatchable_graph(timetable, next_task)
         except (TaskNotFound, EmptyTimetable):
             return
 
@@ -413,11 +413,11 @@ class TimetableMonitorProxy(TimetableMonitorBase):
         self.bidder.changed_timetable = True
 
         if self.d_graph_watchdog:
-            self._re_compute_dispatchable_graph(timetable)
+            self.re_compute_dispatchable_graph(timetable)
 
-    def _re_compute_dispatchable_graph(self, timetable, next_task=None):
+    def re_compute_dispatchable_graph(self, timetable, next_task=None):
         try:
-            successful_recomputation = super()._re_compute_dispatchable_graph(timetable)
+            successful_recomputation = super().re_compute_dispatchable_graph(timetable)
             if successful_recomputation:
                 self.bidder.changed_timetable = True
         except EmptyTimetable:

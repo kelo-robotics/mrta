@@ -102,15 +102,15 @@ class Bidder:
                 continue
 
             prev_location = self.get_previous_location(insertion_point)
-            travel_duration = self.get_travel_duration(task, prev_location)
-            if travel_duration is None:
+            travel_time = self.get_travel_time(task, prev_location)
+            if travel_time is None:
                 self.logger.warning("There was a problem computing the estimated duration between %s and %s "
                                     "Not computing bid for insertion point %s",
                                     prev_location, task.request.start_location, insertion_point)
                 continue
 
             prev_task_is_frozen = self.previous_task_is_frozen(insertion_point)
-            new_stn_task = self.timetable.to_stn_task(task, travel_duration, insertion_point,
+            new_stn_task = self.timetable.to_stn_task(task, travel_time, insertion_point,
                                                       self.task_announcement.closure_time,
                                                       prev_task_is_frozen)
 
@@ -125,9 +125,9 @@ class Bidder:
                 prev_version_next_stn_task = self.timetable.get_stn_task(next_task.task_id)
 
                 prev_location = self.get_previous_location(insertion_point+1)
-                travel_duration = self.get_travel_duration(next_task, prev_location)
+                travel_time = self.get_travel_time(next_task, prev_location)
 
-                if travel_duration is None:
+                if travel_time is None:
                     self.logger.warning("There was a problem computing the estimated duration between %s and %s "
                                         "Not computing bid for insertion point %s",
                                         prev_location, next_task.request.start_location, insertion_point)
@@ -135,7 +135,7 @@ class Bidder:
 
                 prev_task_is_frozen = self.previous_task_is_frozen(insertion_point+1)
                 next_stn_task = self.timetable.update_stn_task(copy.deepcopy(prev_version_next_stn_task),
-                                                               travel_duration,
+                                                               travel_time,
                                                                insertion_point+1,
                                                                self.task_announcement.closure_time,
                                                                prev_task_is_frozen)
@@ -258,7 +258,7 @@ class Bidder:
             robot_location = "AMK_D_L-1_C39"
         return robot_location
 
-    def get_travel_duration(self, task, previous_location):
+    def get_travel_time(self, task, previous_location):
         """ Returns time (mean, variance) to go from previous_location to task.start_location
         """
         try:
@@ -268,9 +268,9 @@ class Bidder:
             self.logger.warning("No planner configured")
             mean = 1
             variance = 0.1
-        travel_duration = Duration(mean=mean, variance=variance)
-        self.logger.debug("Travel duration: %s", travel_duration)
-        return travel_duration
+        travel_time = Duration(mean=mean, variance=variance)
+        self.logger.debug("Travel duration: %s", travel_time)
+        return travel_time
 
     def previous_task_is_frozen(self, insertion_point):
         if insertion_point > 1:

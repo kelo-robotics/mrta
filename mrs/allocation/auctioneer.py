@@ -126,14 +126,15 @@ class Auctioneer(SimulatorInterface):
 
     def process_allocation(self):
         task = self.tasks_to_allocate.pop(self.winning_bid.task_id)
+        allocation_info = self.winning_bid.get_allocation_info()
         try:
             timetable = self.timetable_manager.update_timetable(self.winning_bid.robot_id,
-                                                                self.winning_bid.get_allocation_info(),
+                                                                allocation_info,
                                                                 task)
         except InvalidAllocation as e:
             self.logger.warning("The allocation of task %s to robot %s is inconsistent. Aborting allocation."
                                 "Task %s will be included in next allocation round", e.task_id, e.robot_id, e.task_id)
-            self.undo_allocation(self.winning_bid.get_allocation_info())
+            self.undo_allocation(allocation_info)
             self.tasks_to_allocate[task.task_id] = task
             return
 
@@ -142,6 +143,12 @@ class Auctioneer(SimulatorInterface):
         allocation = (self.winning_bid.task_id, [self.winning_bid.robot_id])
         self.logger.debug("Allocation: %s", allocation)
         self.logger.debug("Tasks to allocate %s", [task_id for task_id, task in self.tasks_to_allocate.items()])
+
+        travel_time_new_task = allocation_info.new_task.get_edge("travel_time")
+        task.update_travel_time(mean=travel_time_new_task.mean, variance=travel_time_new_task.variance)
+        if allocation_info.next_task:
+            travel_time_next_task = allocation_info.next_task.get_edge("travel_time")
+            task.update_travel_time(mean=travel_time_next_task.mean, variance=travel_time_next_task.variance)
 
         self.allocations.append(allocation)
         task_performance = TaskPerformance.get_task(self.winning_bid.task_id)
