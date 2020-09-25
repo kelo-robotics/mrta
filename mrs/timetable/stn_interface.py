@@ -28,6 +28,12 @@ class STNInterface:
     def update_task(self, stn_task):
         self.stn.update_task(stn_task)
 
+    def update_travel_time(self, task_id, travel_edge):
+        stn_task = self.get_stn_task(task_id)
+        stn_task.update_edge(travel_edge.name, travel_edge.mean, travel_edge.variance)
+        self.add_stn_task(stn_task)
+        self.stn.update_travel_time(stn_task)
+
     def to_stn_task(self, task, travel_time, insertion_point, earliest_admissible_time, previous_task_is_frozen):
         travel_edge = Edge(name="travel_time", mean=travel_time.mean, variance=travel_time.variance)
         duration_edge = Edge(name="work_time", mean=task.work_time.mean, variance=task.work_time.variance)

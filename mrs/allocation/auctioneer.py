@@ -146,9 +146,11 @@ class Auctioneer(SimulatorInterface):
 
         travel_time_new_task = allocation_info.new_task.get_edge("travel_time")
         task.update_travel_time(mean=travel_time_new_task.mean, variance=travel_time_new_task.variance)
+
         if allocation_info.next_task:
+            next_task = Task.get_task(allocation_info.next_task.task_id)
             travel_time_next_task = allocation_info.next_task.get_edge("travel_time")
-            task.update_travel_time(mean=travel_time_next_task.mean, variance=travel_time_next_task.variance)
+            next_task.update_travel_time(mean=travel_time_next_task.mean, variance=travel_time_next_task.variance)
 
         self.allocations.append(allocation)
         task_performance = TaskPerformance.get_task(self.winning_bid.task_id)

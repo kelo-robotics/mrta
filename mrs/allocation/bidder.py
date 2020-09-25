@@ -320,7 +320,15 @@ class Bidder:
     def allocate_to_robot(self, task_id):
         allocation_info = self.round.bid_placed.get_allocation_info()
         self.timetable.add_stn_task(allocation_info.new_task)
+
+        task = self.tasks.get(task_id)
+        travel_time_new_task = allocation_info.new_task.get_edge("travel_time")
+        task.update_travel_time(mean=travel_time_new_task.mean, variance=travel_time_new_task.variance, save_in_db=False)
+
         if allocation_info.next_task:
+            next_task = self.tasks.get(allocation_info.new_task.task_id)
+            travel_time_next_task = allocation_info.next_task.get_edge("travel_time")
+            next_task.update_travel_time(mean=travel_time_next_task.mean, variance=travel_time_next_task.variance, save_in_db=False)
             self.timetable.add_stn_task(allocation_info.next_task)
 
         self.timetable.stn = allocation_info.stn

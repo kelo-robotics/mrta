@@ -300,10 +300,12 @@ class TimetableMonitor(TimetableMonitorBase):
             successful_recomputation = super().re_compute_dispatchable_graph(timetable)
             if successful_recomputation:
                 self.auctioneer.changed_timetable.append(timetable.robot_id)
+                return True
             elif not successful_recomputation and next_task:
                 self.recover(next_task)
+                return False
         except EmptyTimetable:
-            pass
+           return False
 
     def recover(self, task):
         if self.recovery_method.name == "preempt":
