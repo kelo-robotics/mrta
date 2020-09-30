@@ -172,10 +172,10 @@ class Allocate(RopodPyre):
         """ Reads tasks' status from the ccu_store and sets ``terminated`` to ``True`` when the termination condition
         is met.
 
-        Termination condition: the number of completed plus the number of preempted tasks is equal
+        Termination condition: the number of completed plus the number of canceled tasks is equal
         to the number of tasks in the dataset
 
-            tasks  = completed_tasks + preempted_tasks
+            tasks  = completed_tasks + canceled_tasks
 
         """
         unallocated_tasks = Task.get_tasks_by_status(TaskStatusConst.UNALLOCATED)
@@ -186,7 +186,6 @@ class Allocate(RopodPyre):
 
         with switch_collection(TaskStatus, TaskStatus.Meta.archive_collection):
             completed_tasks = Task.get_tasks_by_status(TaskStatusConst.COMPLETED)
-            preempted_tasks = Task.get_tasks_by_status(TaskStatusConst.PREEMPTED)
             canceled_tasks = Task.get_tasks_by_status(TaskStatusConst.CANCELED)
             aborted_tasks = Task.get_tasks_by_status(TaskStatusConst.ABORTED)
 
@@ -196,11 +195,10 @@ class Allocate(RopodPyre):
         self.logger.info("Dispatched: %s", len(dispatched_tasks))
         self.logger.info("Ongoing: %s", len(ongoing_tasks))
         self.logger.info("Completed: %s ", len(completed_tasks))
-        self.logger.info("Preempted: %s ", len(preempted_tasks))
         self.logger.info("Canceled: %s", len(canceled_tasks))
         self.logger.info("Aborted: %s", len(aborted_tasks))
 
-        tasks = completed_tasks + preempted_tasks
+        tasks = completed_tasks + canceled_tasks
 
         if len(tasks) == len(self.tasks):
             self.logger.info("Terminating test")

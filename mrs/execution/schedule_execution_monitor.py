@@ -83,7 +83,7 @@ class ScheduleExecutionMonitor(TimetableMonitorBase):
             if "re-allocate" in self.recovery_method:
                 self.re_allocate(task)
             else:
-                self.preempt(task)
+                self.cancel(task)
 
     def _update_timepoint(self, task, timetable, r_assigned_time, node_id, task_progress, store=False):
         is_consistent = True
@@ -115,8 +115,8 @@ class ScheduleExecutionMonitor(TimetableMonitorBase):
         if task_to_recover and self.recovery_method.name == "re-allocate":
             self.re_allocate(task_to_recover)
 
-        elif task_to_recover and self.recovery_method.name == "preempt":
-            self.preempt(task_to_recover)
+        elif task_to_recover and self.recovery_method.name == "cancel":
+            self.cancel(task_to_recover)
 
     def re_allocate(self, task):
         self.logger.info("Trigger re-allocation of task %s", task.task_id)
@@ -125,11 +125,11 @@ class ScheduleExecutionMonitor(TimetableMonitorBase):
         task_status = TaskStatus(task.task_id, self.robot_id, TaskStatusConst.UNALLOCATED)
         self.send_task_status(task_status)
 
-    def preempt(self, task):
-        self.logger.info("Trigger preemption of task %s", task.task_id)
-        self.tasks_status[task.task_id] = TaskStatusConst.PREEMPTED
+    def cancel(self, task):
+        self.logger.info("Trigger cancellation of task %s", task.task_id)
+        self.tasks_status[task.task_id] = TaskStatusConst.CANCELED
         self.timetable.remove_task(task.task_id)
-        task_status = TaskStatus(task.task_id, self.robot_id, TaskStatusConst.PREEMPTED)
+        task_status = TaskStatus(task.task_id, self.robot_id, TaskStatusConst.CANCELED)
         self.send_task_status(task_status)
 
     def send_task_status(self, task_status, timestamp=None):

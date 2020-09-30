@@ -246,7 +246,7 @@ class Auctioneer(SimulatorInterface):
             else:
                 self.logger.warning("Task %s cannot not be allocated at its given temporal constraints",
                                     task.task_id)
-                task.update_status(TaskStatusConst.PREEMPTED)
+                task.update_status(TaskStatusConst.CANCELED)
                 self.tasks_to_allocate.pop(task.task_id)
 
     def get_closure_time(self, tasks):
