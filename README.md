@@ -127,7 +127,7 @@ python3 run.py approach_name
 Example:
 
 ```
-python3 run.py tessi-dsc-corrective-preempt
+python3 run.py tessi-dsc-corrective-cancel
 ```
 
 ## Without Docker

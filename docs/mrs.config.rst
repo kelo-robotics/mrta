@@ -66,7 +66,7 @@ type\_:
     * Corrective: Checks if a recovery method is required only if the last assignment was inconsistent.
     * Preventive: Checks if a recovery method is required both, when the last assignment was consistent and when it was inconsistent.
 
-method: Recovery method to use. Options: re-allocate, preempt
+method: Recovery method to use. Options: re-allocate, cancel
 
 **Auctioneer**
 ::

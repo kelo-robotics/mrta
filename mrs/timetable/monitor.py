@@ -255,8 +255,8 @@ class TimetableMonitor(TimetableMonitorBase):
             elif task_status.task_status == TaskStatusConst.UNALLOCATED:
                 self.re_allocate(task)
 
-            elif task_status.task_status == TaskStatusConst.PREEMPTED:
-                self.preempt(task)
+            elif task_status.task_status == TaskStatusConst.CANCELED:
+                self.cancel(task)
         except DoesNotExist:
             self.logger.warning("Task %s does not exist", task_status.task_id)
 
@@ -308,8 +308,8 @@ class TimetableMonitor(TimetableMonitorBase):
            return False
 
     def recover(self, task):
-        if self.recovery_method.name == "preempt":
-            self.preempt(task)
+        if self.recovery_method.name == "cancel":
+            self.cancel(task)
         elif self.recovery_method.name == "re-allocate":
             self.re_allocate(task)
 
@@ -342,9 +342,9 @@ class TimetableMonitor(TimetableMonitorBase):
         self.auctioneer.allocate(task)
         self.tasks_to_reallocate.append(task)
 
-    def preempt(self, task):
-        self.logger.info("Preempting task %s", task.task_id)
-        self.remove_task(task, TaskStatusConst.PREEMPTED)
+    def cancel(self, task):
+        self.logger.info("Cancelling task %s", task.task_id)
+        self.remove_task(task, TaskStatusConst.CANCELED)
 
     def send_remove_task(self, task_id, status, robot_id):
         remove_task = RemoveTaskFromSchedule(task_id, status)
