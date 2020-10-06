@@ -61,9 +61,8 @@ class Auctioneer(SimulatorInterface):
     def unregister_robot(self, robot):
         self.logger.warning("Unregistering robot %s", robot.robot_id)
         self.robots.pop(robot.robot_id)
-        allocated = Task.get_tasks(robot.robot_id, TaskStatusConst.ALLOCATED)
-        scheduled = Task.get_tasks(robot.robot_id, TaskStatusConst.SCHEDULED)
-        tasks_to_re_allocate = allocated + scheduled
+        tasks_to_re_allocate = [task for task_id, task in self.allocated_tasks.items() if robot.robot_id in
+                                task.assigned_robots]
         self.logger.warning("The following tasks will be re-allocated: %s",
                             [task.task_id for task in tasks_to_re_allocate])
         return tasks_to_re_allocate
