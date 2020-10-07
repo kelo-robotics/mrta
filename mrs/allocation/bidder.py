@@ -58,7 +58,7 @@ class Bidder:
         payload = msg['payload']
         self.task_announcement = TaskAnnouncement.from_payload(payload)
         self.tasks.update({task.task_id: task for task in self.task_announcement.tasks})
-        self.logger.debug("Received task-announcement for round with tasks:", self.task_announcement.round_id,
+        self.logger.debug("Received task-announcement for round %s with tasks: %s", self.task_announcement.round_id,
                           [task.task_id for task in self.task_announcement.tasks])
         self.round = None
         self.changed_timetable = False
