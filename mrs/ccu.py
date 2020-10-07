@@ -5,13 +5,9 @@ import time
 from fmlib.models.actions import GoTo
 from fmlib.models.tasks import TaskPlan
 from fmlib.models.tasks import TransportationTask as Task
-from ropod.structs.status import TaskStatus as TaskStatusConst
-
 from mrs.allocation.auctioneer import Auctioneer
 from mrs.config.configurator import Configurator
 from mrs.config.params import get_config_params
-from mrs.db.models.performance.robot import RobotPerformance
-from mrs.db.models.performance.task import TaskPerformance
 from mrs.execution.delay_recovery import DelayRecovery
 from mrs.execution.dispatcher import Dispatcher
 from mrs.execution.fleet_monitor import FleetMonitor
@@ -19,6 +15,7 @@ from mrs.performance.tracker import PerformanceTracker
 from mrs.simulation.simulator import Simulator, SimulatorInterface
 from mrs.timetable.monitor import TimetableMonitor
 from mrs.timetable.timetable import TimetableManager
+from ropod.structs.status import TaskStatus as TaskStatusConst
 
 _component_modules = {
     'simulator': Simulator,
@@ -102,11 +99,9 @@ class CCU:
         self.logger.info("Start test at %s", initial_time)
 
         tasks = Task.get_tasks_by_status(TaskStatusConst.UNALLOCATED)
-        for robot_id in self.auctioneer.robot_ids:
-            RobotPerformance.create_new(robot_id=robot_id)
         for task in tasks:
+            task.api = self.api
             self.add_task_plan(task)
-            TaskPerformance.create_new(task_id=task.task_id)
             self.tasks[task.task_id] = task
 
         self.simulator_interface.start(initial_time)
@@ -124,7 +119,7 @@ class CCU:
                                         task.request.finish_location)
 
         mean, variance = self.get_task_duration(path)
-        task.update_duration(mean, variance)
+        task.update_work_time(mean, variance)
 
         action = GoTo.create_new(type="PICKUP-TO-DELIVERY", locations=path)
         action.update_duration(mean, variance)
@@ -158,9 +153,11 @@ class CCU:
             task_id, robot_ids = self.auctioneer.allocations.pop(0)
             task = self.auctioneer.allocated_tasks.get(task_id)
             task.assign_robots(robot_ids)
-            task_schedule = self.auctioneer.get_task_schedule(task_id, robot_ids[0])
-            task.update_schedule(task_schedule)
-            self.update_allocation_metrics()
+
+            self.logger.debug("Task %s was allocated to %s. "
+                              "Estimated departure time: %s ",
+                              task.task_id, robot_ids,
+                              task.departure_time)
 
             for robot_id in robot_ids:
                 self.dispatcher.send_d_graph_update(robot_id)
@@ -186,7 +183,6 @@ class CCU:
                 self.dispatcher.run()
                 self.timetable_monitor.run()
                 self.process_allocation()
-                self.performance_tracker.run()
                 self.api.run()
                 time.sleep(0.5)
         except (KeyboardInterrupt, SystemExit):

@@ -8,10 +8,9 @@ class FleetMonitor:
         self.logger = logging.getLogger('mrs.fleet.monitor')
         self.robots = dict()
 
-    def register_robot(self, robot_id):
-        self.logger.debug("Registering robot %s", robot_id)
-        robot = Robot.create_new(robot_id)
-        self.robots[robot_id] = robot
+    def register_robot(self, robot):
+        self.logger.debug("Registering robot %s", robot.robot_id)
+        self.robots[robot.robot_id] = robot
 
     def robot_pose_cb(self, msg):
         payload = msg.get("payload")

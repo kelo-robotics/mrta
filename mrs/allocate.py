@@ -3,16 +3,13 @@ import time
 
 from fmlib.db.mongo import MongoStore
 from fmlib.db.mongo import MongoStoreInterface
-from fmlib.models.tasks import TaskStatus
 from fmlib.models.tasks import TransportationTask as Task
-from pymodm.context_managers import switch_collection
-from ropod.pyre_communicator.base_class import RopodPyre
-from ropod.structs.task import TaskStatus as TaskStatusConst
-
 from mrs.messages.task_contract import TaskContract
 from mrs.simulation.simulator import Simulator, SimulatorInterface
 from mrs.utils.datasets import load_tasks_to_db
 from mrs.utils.utils import get_msg_fixture
+from ropod.pyre_communicator.base_class import RopodPyre
+from ropod.structs.status import TaskStatus as TaskStatusConst
 
 
 class Allocate(RopodPyre):
@@ -89,7 +86,7 @@ class Allocate(RopodPyre):
         for robot_id in fleet:
             for store_name, config in store_configs.items():
                 config.update(
-                    {'db_name': store_name + '_' + robot_id.split('_')[1]})
+                    {'db_name': store_name + '_' + str(robot_id)})
                 store = MongoStore(**config)
                 self.clean_store(store)
 
@@ -183,11 +180,9 @@ class Allocate(RopodPyre):
         planned_tasks = Task.get_tasks_by_status(TaskStatusConst.PLANNED)
         dispatched_tasks = Task.get_tasks_by_status(TaskStatusConst.DISPATCHED)
         ongoing_tasks = Task.get_tasks_by_status(TaskStatusConst.ONGOING)
-
-        with switch_collection(TaskStatus, TaskStatus.Meta.archive_collection):
-            completed_tasks = Task.get_tasks_by_status(TaskStatusConst.COMPLETED)
-            canceled_tasks = Task.get_tasks_by_status(TaskStatusConst.CANCELED)
-            aborted_tasks = Task.get_tasks_by_status(TaskStatusConst.ABORTED)
+        completed_tasks = Task.get_tasks_by_status(TaskStatusConst.COMPLETED)
+        canceled_tasks = Task.get_tasks_by_status(TaskStatusConst.CANCELED)
+        aborted_tasks = Task.get_tasks_by_status(TaskStatusConst.ABORTED)
 
         self.logger.info("Unallocated: %s", len(unallocated_tasks))
         self.logger.info("Allocated: %s", len(allocated_tasks))

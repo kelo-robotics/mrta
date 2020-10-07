@@ -91,11 +91,13 @@ class TimetableMonitorBase:
         if len(node_ids) == 2:
             timetable.execute_edge(node_ids[0], node_ids[1])
 
-    def _update_progress(self, task, task_progress, timestamp):
+    def _update_progress(self, task, task_status, timestamp):
+        task_progress = task_status.task_progress
+        robot_pose = Robot.get_robot(task_status.robot_id).position
         self.logger.debug("Updating progress of task %s action %s status %s", task.task_id, task_progress.action_id,
                           task_progress.action_status.status)
         if not task.status.progress:
-            task.update_progress(task_progress.action_id, task_progress.action_status.status)
+            task.update_progress(task_progress.action_id, task_progress.action_status.status, robot_pose)
         action_progress = task.status.progress.get_action(task_progress.action_id)
 
         self.logger.debug("Current action progress: status %s, start time %s, finish time %s", action_progress.status,
@@ -106,30 +108,11 @@ class TimetableMonitorBase:
         elif task_progress.action_status.status == ActionStatusConst.COMPLETED:
             kwargs.update(start_time=action_progress.start_time, finish_time=timestamp)
 
-        task.update_progress(task_progress.action_id, task_progress.action_status.status, **kwargs)
+        task.update_progress(task_progress.action_id, task_progress.action_status.status, robot_pose, **kwargs)
         action_progress = task.status.progress.get_action(task_progress.action_id)
 
         self.logger.debug("Updated action progress: status %s, start time %s, finish time %s", action_progress.status,
                           action_progress.start_time, action_progress.finish_time)
-
-    def _update_task_schedule(self, task, task_progress, timestamp):
-        # TODO: Get schedule from dispatchable graph
-        first_action_id = task.plan[0].actions[0].action_id
-        last_action_id = task.plan[0].actions[-1].action_id
-
-        if task_progress.action_id == first_action_id and \
-                task_progress.action_status.status == ActionStatusConst.ONGOING:
-            self.logger.debug("Task %s departure time %s", task.task_id, timestamp)
-            task_schedule = {"departure_time": timestamp,
-                             "finish_time": task.finish_time}
-            task.update_schedule(task_schedule)
-
-        elif task_progress.action_id == last_action_id and \
-                task_progress.action_status.status == ActionStatusConst.COMPLETED:
-            self.logger.debug("Task %s finish time %s", task.task_id, timestamp)
-            task_schedule = {"start_time": task.start_time,
-                             "finish_time": timestamp}
-            task.update_schedule(task_schedule)
 
     def re_compute_dispatchable_graph(self, timetable, next_task=None):
         """ Recomputes the timetable's dispatchable graph.
@@ -262,8 +245,7 @@ class TimetableMonitor(TimetableMonitorBase):
 
     def process_task_status_update(self, task, task_status, timestamp):
         super().process_task_status_update(task, task_status, timestamp)
-        self._update_progress(task, task_status.task_progress, timestamp)
-        self._update_task_schedule(task, task_status.task_progress, timestamp)
+        self._update_progress(task, task_status, timestamp)
 
     def _update_timepoint(self, task, timetable, r_assigned_time, node_id, task_progress, store=True):
         timetable.check_is_task_delayed(task, r_assigned_time, node_id)
@@ -305,7 +287,7 @@ class TimetableMonitor(TimetableMonitorBase):
                 self.recover(next_task)
                 return False
         except EmptyTimetable:
-           return False
+            return False
 
     def recover(self, task):
         if self.recovery_method.name == "cancel":
@@ -336,6 +318,7 @@ class TimetableMonitor(TimetableMonitorBase):
     def re_allocate(self, task):
         self.logger.info("Re-allocating task %s", task.task_id)
         self.remove_task(task, TaskStatusConst.UNALLOCATED)
+        task.api = self.api
         task.unassign_robots()
         self.tasks[task.task_id] = task
         self.auctioneer.allocated_tasks.pop(task.task_id)
@@ -363,11 +346,9 @@ class TimetableMonitor(TimetableMonitorBase):
 
             for task, status in ready_to_be_removed:
                 self.tasks_to_remove.remove((task, status))
-                if status == TaskStatusConst.COMPLETED:
-                    self.completed_tasks.append(task)
                 self.remove_task(task, status)
 
-        if self.deleting_task and not self.completed_tasks:
+        if self.deleting_task:
             self.deleting_task = False
 
 
@@ -408,7 +389,7 @@ class TimetableMonitorProxy(TimetableMonitorBase):
 
     def update_robot_pose(self, task):
         x, y, theta = self.planner.get_pose(task.request.finish_location)
-        self.robot.update_position(save=False, x=x, y=y, theta=theta)
+        self.robot.update_position(save_in_db=False, x=x, y=y, theta=theta)
 
     def _update_timepoint(self, task, timetable, r_assigned_time, node_id, task_progress, store=False):
         super()._update_timepoint(task, timetable, r_assigned_time, node_id, task_progress, store)

@@ -45,9 +45,9 @@ class Dispatcher(SimulatorInterface):
             self.logger.debug("Adding %s", key)
             self.__dict__[key] = value
 
-    def register_robot(self, robot_id):
-        self.logger.debug("Registering robot %s", robot_id)
-        self.robot_ids.append(robot_id)
+    def register_robot(self, robot):
+        self.logger.debug("Registering robot %s", robot.robot_id)
+        self.robot_ids.append(robot.robot_id)
 
     def run(self, **kwargs):
         self.dispatch_tasks()
@@ -92,11 +92,15 @@ class Dispatcher(SimulatorInterface):
         action.update_duration(mean, variance)
         return action
 
-    def add_pre_task_action(self, task, robot_id):
+    def add_pre_task_action(self, task, robot_id, timetable):
         self.logger.debug("Adding pre_task_action to plan for task %s", task.task_id)
         pre_task_action = self.get_pre_task_action(task, robot_id)
         task.plan[0].actions.insert(0, pre_task_action)
         task.save()
+        # Link departure node to first action in the plan
+        first_action_id = task.plan[0].actions[0].action_id
+        timetable.update_action_id(task.task_id, "departure", first_action_id)
+        timetable.store()
 
     def dispatch_tasks(self):
         for robot_id in self.robot_ids:
@@ -106,7 +110,7 @@ class Dispatcher(SimulatorInterface):
             if task and task.status.status == TaskStatusConst.ALLOCATED:
                 start_time = timetable.get_departure_time(task.task_id)
                 if self.is_schedulable(start_time):
-                    self.add_pre_task_action(task, robot_id)
+                    self.add_pre_task_action(task, robot_id, timetable)
                     self.send_d_graph_update(robot_id)
                     self.dispatch_task(task, robot_id)
 
@@ -131,5 +135,5 @@ class Dispatcher(SimulatorInterface):
         if prev_d_graph_update != d_graph_update:
             self.logger.debug("Sending DGraphUpdate to %s", robot_id)
             msg = self.api.create_message(d_graph_update)
-            self.api.publish(msg, peer=robot_id)
+            self.api.publish(msg, peer=str(robot_id))
             self.d_graph_updates[robot_id] = copy.deepcopy(d_graph_update)

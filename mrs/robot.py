@@ -32,11 +32,12 @@ class Robot:
         kwargs: Optional configuration arguments
     """
 
-    def __init__(self, robot_id, api, executor, schedule_execution_monitor,
+    def __init__(self, robot_id, api, ccu_store, executor, schedule_execution_monitor,
                  **kwargs):
 
         self.robot_id = robot_id
         self.api = api
+        self.ccu_store = ccu_store
         self.executor = executor
         self.schedule_execution_monitor = schedule_execution_monitor
 
@@ -64,7 +65,7 @@ if __name__ == '__main__':
     from planner.planner import Planner
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('robot_id', type=str, help='example: robot_001')
+    parser.add_argument('robot_id', type=int, help='example: 1')
     parser.add_argument('--file',
                         type=str,
                         action='store',

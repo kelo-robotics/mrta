@@ -20,15 +20,16 @@ _component_modules = {'simulator': Simulator,
 
 
 class RobotProxy:
-    def __init__(self, robot_id, api, bidder, timetable_monitor, **kwargs):
+    def __init__(self, robot_id, api, ccu_store, bidder, timetable_monitor, **kwargs):
         self.logger = logging.getLogger('mrs.robot.proxy%s' % robot_id)
 
         self.robot_id = robot_id
         self.api = api
+        self.ccu_store = ccu_store
         self.bidder = bidder
         self.timetable_monitor = timetable_monitor
 
-        self.robot_model = RobotModel.create_new(robot_id, save=False)
+        self.robot_model = RobotModel.create_new(robot_id, capabilities=["navigation", "docking"], save_in_db=False)
         self.tasks = dict()
         self.tasks_status = dict()
         self.requests = dict()
@@ -43,6 +44,7 @@ class RobotProxy:
                 self.logger.debug("Configuring: %s", component_name)
                 component.configure(robot=self.robot_model,
                                     tasks=self.tasks,
+                                    capabilities=self.robot_model.capabilities,
                                     tasks_status=self.tasks_status,
                                     **kwargs)
 
@@ -50,7 +52,7 @@ class RobotProxy:
         payload = msg.get("payload")
         if payload.get("robotId") == self.robot_id:
             self.logger.debug("Robot %s received pose", self.robot_id)
-            self.robot_model.update_position(save=False, **payload.get("pose"))
+            self.robot_model.update_position(save_in_db=False, **payload.get("pose"))
 
     def task_cb(self, msg):
         payload = msg['payload']
@@ -58,10 +60,14 @@ class RobotProxy:
         if self.robot_id in assigned_robots:
             task_type = payload.pop("_cls").split('.')[-1]
             task_cls = getattr(tasks, task_type)
-            task = task_cls.from_payload(payload, save=False)
+            task = task_cls.from_payload(payload, save_in_db=False)
             self.tasks[task.task_id] = task
             self.tasks_status[task.task_id] = TaskStatusConst.DISPATCHED
             self.logger.debug("Received task %s", task.task_id)
+
+            # Link departure node to first action in the plan
+            first_action_id = task.plan[0].actions[0].action_id
+            self.bidder.timetable.update_action_id(task.task_id, "departure", first_action_id)
 
     def run(self):
         try:
@@ -79,7 +85,7 @@ if __name__ == '__main__':
     from planner.planner import Planner
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('robot_id', type=str, help='example: robot_001')
+    parser.add_argument('robot_id', type=int, help='example: 1')
     parser.add_argument('--file', type=str, action='store', help='Path to the config file')
     parser.add_argument('--experiment', type=str, action='store', help='Experiment_name')
     parser.add_argument('--approach', type=str, action='store', help='Approach name')

@@ -45,7 +45,6 @@ class Bidder:
         self.task_announcement = None
         self.round = None
         self.changed_timetable = False
-        self.capabilities = list()
 
         self.logger = logging.getLogger('mrs.bidder.%s' % self.robot_id)
         self.logger.debug("Bidder initialized %s", self.robot_id)
@@ -59,8 +58,8 @@ class Bidder:
         payload = msg['payload']
         self.task_announcement = TaskAnnouncement.from_payload(payload)
         self.tasks.update({task.task_id: task for task in self.task_announcement.tasks})
-        self.logger.debug("Received task-announcement for round %s with %s tasks", self.task_announcement.round_id,
-                          len(self.task_announcement.tasks))
+        self.logger.debug("Received task-announcement for round with tasks:", self.task_announcement.round_id,
+                          [task.task_id for task in self.task_announcement.tasks])
         self.round = None
         self.changed_timetable = False
 

@@ -302,15 +302,15 @@ class TimetableManager(dict):
     def get_timetable(self, robot_id):
         return self.get(robot_id)
 
-    def register_robot(self, robot_id):
-        self.logger.debug("Registering robot %s", robot_id)
-        timetable = Timetable(robot_id, self.stp_solver, simulator=self.simulator)
+    def register_robot(self, robot):
+        self.logger.debug("Registering robot %s", robot.robot_id)
+        timetable = Timetable(robot.robot_id, self.stp_solver, simulator=self.simulator)
         timetable.fetch()
-        self[robot_id] = timetable
+        self[robot.robot_id] = timetable
         timetable.store()
 
-    def unregister_robot(self, robot_id):
-        self.pop(robot_id)
+    def unregister_robot(self, robot):
+        self.pop(robot.robot_id)
 
     def fetch_timetables(self):
         for robot_id, timetable in self.items():

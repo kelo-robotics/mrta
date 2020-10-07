@@ -18,7 +18,7 @@ class Executor(RopodPyre):
     """
     def __init__(self, robot_id, max_seed, **kwargs):
         self.robot_id = robot_id
-        zyre_config = {'node_name': 'executor_' + robot_id,
+        zyre_config = {'node_name': 'executor_' + str(robot_id),
                        'groups': ['ROPOD'],
                        'message_types': ['TASK', 'TASK-STATUS']}
 
@@ -50,7 +50,7 @@ class Executor(RopodPyre):
         if msg_type == 'TASK':
             assigned_robots = payload.get("assignedRobots")
             if self.robot_id in assigned_robots:
-                task = Task.from_payload(payload, save=False)
+                task = Task.from_payload(payload, save_in_db=False)
                 self.logger.debug("Received task %s", task.task_id)
                 self.task = task
 
@@ -64,7 +64,7 @@ class Executor(RopodPyre):
             for i, action in enumerate(self.task.plan[0].actions):
                 self.task_progress = TaskProgress(action.action_id, action.type)
                 if i == 0:
-                    finish_time_last_action = self.execute(action, self.task.start_time)
+                    finish_time_last_action = self.execute(action, self.task.scheduled_time.earliest_time)
                 elif i > 0:
                     finish_time_last_action = self.execute(action, finish_time_last_action)
 
@@ -73,10 +73,10 @@ class Executor(RopodPyre):
 
     def send_task_status(self, task_status):
         task_status = TaskStatusMsg(self.task.task_id, self.robot_id, task_status, self.task_progress)
-        self.logger.debug("Sending task status %s for task %s", task_status, self.task.task_id)
+        self.logger.debug("Sending task status %s for task %s", task_status.task_progress, self.task.task_id)
         msg = self._mf.create_message(task_status)
         msg["header"]["timestamp"] = self.task_progress.timestamp.isoformat()
-        self.whisper(msg, peer=self.robot_id)
+        self.whisper(msg, peer=str(self.robot_id))
 
     def execute(self, action, start_time):
         self.logger.debug("Executing action %s: %s ", action.action_id, action.type)

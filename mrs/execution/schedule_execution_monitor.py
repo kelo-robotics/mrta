@@ -38,10 +38,15 @@ class ScheduleExecutionMonitor(TimetableMonitorBase):
         if self.robot_id in assigned_robots:
             task_type = payload.pop("_cls").split('.')[-1]
             task_cls = getattr(tasks, task_type)
-            task = task_cls.from_payload(payload, save=False)
+            task = task_cls.from_payload(payload, save_in_db=False)
+            task.api = self.api
             self.tasks[task.task_id] = task
             self.tasks_status[task.task_id] = TaskStatusConst.DISPATCHED
             self.logger.debug("Received task %s", task.task_id)
+
+            # Link departure node to first action in the plan
+            first_action_id = task.plan[0].actions[0].action_id
+            self.timetable.update_action_id(task.task_id, "departure", first_action_id)
 
     def d_graph_update_cb(self, msg):
         payload = msg['payload']
@@ -142,7 +147,7 @@ class ScheduleExecutionMonitor(TimetableMonitorBase):
     def send_task(self, task):
         self.logger.debug("Sending task %s to executor", task.task_id)
         task_msg = self.api.create_message(task)
-        self.api.publish(task_msg, peer='executor_' + self.robot_id)
+        self.api.publish(task_msg, peer='executor_' + str(self.robot_id))
 
     def run(self):
         """ Gets the earliest task assigned to this robot and calls the ``process_task`` method
@@ -165,11 +170,8 @@ class ScheduleExecutionMonitor(TimetableMonitorBase):
 
     def process_task(self, task):
         task_status = self.tasks_status.get(task.task_id)
-        print("Process task: ", task.task_id)
-        print("Task status: ", task_status)
 
         if task_status == TaskStatusConst.DISPATCHED and self.timetable.has_task(task.task_id):
-            print("Schedule task")
             self.schedule(task)
 
         # For real-time execution add is_executable condition

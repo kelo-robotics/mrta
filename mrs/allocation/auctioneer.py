@@ -56,7 +56,7 @@ class Auctioneer(SimulatorInterface):
     def register_robot(self, robot):
         self.logger.debug("Registering robot %s", robot.robot_id)
         self.robots[robot.robot_id] = robot
-        self.timetable_manager.register_robot(robot.robot_id)
+        self.timetable_manager.register_robot(robot)
 
     def unregister_robot(self, robot):
         self.logger.warning("Unregistering robot %s", robot.robot_id)
@@ -184,7 +184,17 @@ class Auctioneer(SimulatorInterface):
         eligible_robots = dict()
 
         for task in tasks:
-            self.check_task_validity(task)
+            if not self.is_valid_time(task.start_constraint.latest_time):
+                if self.alternative_timeslots:
+                    task.hard_constraints = False
+                    self.logger.warning("Setting soft constraints for task %s", task.task_id)
+                else:
+                    self.logger.warning("Task %s cannot not be allocated at its given temporal constraints",
+                                        task.task_id)
+                    task.update_status(TaskStatusConst.CANCELED)
+                    self.tasks_to_allocate.pop(task.task_id)
+                    continue
+
             eligible_robots_for_task = self.get_eligible_robots(task)
 
             if not eligible_robots_for_task:
@@ -236,17 +246,6 @@ class Auctioneer(SimulatorInterface):
                 capable_robots.append(robot_id)
         self.logger.debug("Capable robots for task %s: %s", task.task_id, capable_robots)
         return capable_robots
-
-    def check_task_validity(self, task):
-        if not self.is_valid_time(task.start_constraint.latest_time):
-            if self.alternative_timeslots:
-                task.hard_constraints = False
-                self.logger.warning("Setting soft constraints for task %s", task.task_id)
-            else:
-                self.logger.warning("Task %s cannot not be allocated at its given temporal constraints",
-                                    task.task_id)
-                task.update_status(TaskStatusConst.CANCELED)
-                self.tasks_to_allocate.pop(task.task_id)
 
     def get_closure_time(self, tasks):
         earliest_task = Task.get_earliest_task(tasks)

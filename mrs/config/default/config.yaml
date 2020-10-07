@@ -17,11 +17,9 @@ simulator:
   factor: 0.2
 
 fleet:
-  - robot_001
-#  - robot_002
-#  - robot_003
-#  - robot_004
-#  - robot_005
+  - 1
+  - 2
+  - 3
 
 allocation_method: tessi-srea
 
@@ -89,6 +87,14 @@ ccu_api:
       task:
         msg_type: 'TASK'
         groups: ['TASK-ALLOCATION']
+        method: shout
+      task-update:
+        msg_type: 'TASK-UPDATE'
+        groups: ['ROPOD']
+        method: shout
+      timetable:
+        msg_type: 'TIMETABLE'
+        groups: ['ROPOD']
         method: shout
       d-graph-update:
         msg_type: 'D-GRAPH-UPDATE'
@@ -187,6 +193,10 @@ robot_api:
       task:
         msg_type: 'TASK'
         method: whisper
+      task-update:
+        msg_type: 'TASK-UPDATE'
+        groups: ['ROPOD']
+        method: shout
       task-status:
         groups: ['TASK-ALLOCATION']
         msg_type: 'TASK-STATUS'
