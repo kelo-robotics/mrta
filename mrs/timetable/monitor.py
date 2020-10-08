@@ -1,20 +1,20 @@
 import logging
 import time
 
+from fmlib.models.performance import TaskPerformance, RobotPerformance
 from fmlib.models.robot import Robot
 from fmlib.models.tasks import TransportationTask as Task
-from pymodm.errors import DoesNotExist
-from ropod.structs.status import TaskStatus as TaskStatusConst, ActionStatus as ActionStatusConst
-from ropod.utils.timestamp import TimeStamp
-from stn.exceptions.stp import NoSTPSolution
-
+from fmlib.utils.utils import task_status_names
 from mrs.exceptions.allocation import TaskNotFound
 from mrs.exceptions.execution import EmptyTimetable
 from mrs.messages.remove_task import RemoveTaskFromSchedule
 from mrs.messages.task_status import TaskStatus, TaskProgress
 from mrs.simulation.simulator import SimulatorInterface
 from mrs.utils.time import relative_to_ztp
-from fmlib.models.performance import TaskPerformance, RobotPerformance
+from pymodm.errors import DoesNotExist
+from ropod.structs.status import TaskStatus as TaskStatusConst, ActionStatus as ActionStatusConst
+from ropod.utils.timestamp import TimeStamp
+from stn.exceptions.stp import NoSTPSolution
 
 
 class TimetableMonitorBase:
@@ -223,7 +223,9 @@ class TimetableMonitor(TimetableMonitorBase):
         self.processing_task = False
 
     def process_task_status(self, task_status, timestamp):
-        self.logger.debug("Processing task status %s for task %s by robot %s", task_status.task_status, task_status.task_id,
+        self.logger.debug("Received task status %s for task %s by robot %s",
+                          task_status_names[task_status.task_status],
+                          task_status.task_id,
                           task_status.robot_id)
         try:
             task = Task.get_task(task_status.task_id)
@@ -362,7 +364,8 @@ class TimetableMonitorProxy(TimetableMonitorBase):
 
     def process_task_status(self, task_status, timestamp):
         if self.robot_id == task_status.robot_id:
-            self.logger.debug("Processing task status %s for task %s by robot %s", task_status.task_status,
+            self.logger.debug("Received task status %s for task %s by robot %s",
+                              task_status_names[task_status.task_status],
                               task_status.task_id,
                               task_status.robot_id)
             super().process_task_status(task_status, timestamp)
