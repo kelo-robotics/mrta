@@ -308,6 +308,8 @@ class TimetableManager(dict):
         timetable.fetch()
         self[robot.robot_id] = timetable
         timetable.store()
+        self.logger.debug("STN: \n %s", timetable.stn)
+        self.logger.debug("Dispatchable graph: \n %s", timetable.dispatchable_graph)
 
     def unregister_robot(self, robot):
         self.pop(robot.robot_id)

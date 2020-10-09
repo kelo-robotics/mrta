@@ -45,6 +45,7 @@ class Bidder:
         self.task_announcement = None
         self.round = None
         self.changed_timetable = False
+        self.tasks = dict()
 
         self.logger = logging.getLogger('mrs.bidder.%s' % self.robot_id)
         self.logger.debug("Bidder initialized %s", self.robot_id)
@@ -53,6 +54,9 @@ class Bidder:
         for key, value in kwargs.items():
             self.logger.debug("Adding %s", key)
             self.__dict__[key] = value
+
+    def restore_task_data(self, tasks):
+        self.tasks = tasks
 
     def task_announcement_cb(self, msg):
         payload = msg['payload']

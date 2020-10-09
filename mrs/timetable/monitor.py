@@ -31,6 +31,9 @@ class TimetableMonitorBase:
             self.logger.debug("Adding %s", key)
             self.__dict__[key] = value
 
+    def restore_task_data(self, tasks):
+        self.tasks = tasks
+
     def get_timetable(self, robot_id):
         if self.task_manager:
             return self.task_manager.get_timetable(robot_id)
