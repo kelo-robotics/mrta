@@ -44,6 +44,7 @@ class Auctioneer(SimulatorInterface):
         self.changed_timetable = list()
         self.waiting_for_user_confirmation = list()
         self.round = Round(list(), self.tasks_to_allocate)
+        self.no_robots_registered_warning = False
 
     def configure(self, **kwargs):
         api = kwargs.get('api')
@@ -73,11 +74,14 @@ class Auctioneer(SimulatorInterface):
     def run(self):
         if self.tasks_to_allocate and self.round.finished:
             if not self.robots:
-                self.logger.warning("There are no robots registered on the FMS."
-                                    "Do not announcing tasks for allocation.")
+                if not self.no_robots_registered_warning:
+                    self.logger.warning("There are no robots registered on the FMS."
+                                        "Do not announcing tasks for allocation.")
+                    self.no_robots_registered_warning = True
                 return
 
             tasks = list(self.tasks_to_allocate.values())
+            self.no_robots_registered_warning = False
             self.announce_tasks(tasks)
 
         if self.round.opened and self.round.time_to_close():
