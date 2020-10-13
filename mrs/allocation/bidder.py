@@ -60,34 +60,46 @@ class Bidder:
 
     def task_announcement_cb(self, msg):
         payload = msg['payload']
-        self.task_announcement = TaskAnnouncement.from_payload(payload)
-        self.tasks.update({task.task_id: task for task in self.task_announcement.tasks})
-        self.logger.debug("Received task-announcement for round %s with tasks: %s", self.task_announcement.round_id,
-                          [task.task_id for task in self.task_announcement.tasks])
+        task_announcement = TaskAnnouncement.from_payload(payload)
+        self.tasks.update({task.task_id: task for task in task_announcement.tasks})
+        self.logger.debug("Received task-announcement for round %s with tasks: %s", task_announcement.round_id,
+                          [task.task_id for task in task_announcement.tasks])
         self.round = None
         self.changed_timetable = False
+        self.round = RoundBidder(task_announcement.round_id)
+        self.task_announcement = task_announcement
 
     def run(self):
         if self.task_announcement:
+
+            if self.changed_timetable:
+                self.logger.warning("The timetable changed. Finishing round %s", self.round.round_id)
+                self.finish_round()
+                return
+
             try:
                 task = self.task_announcement.tasks.pop(0)
-                if self.round is None:
-                    self.round = RoundBidder(self.task_announcement.round_id)
-                if all(i in self.capabilities for i in task.capabilities) and \
-                        not task.request.eligible_robots or self.robot_id in task.request.eligible_robots:
-                    bid = self.compute_bid(task)
-                    if bid is not None:
-                        self.logger.debug("Best bid %s", bid)
-                        self.round.bids.append(bid)
-                    else:
-                        self.logger.warning("No bid for task %s", task.task_id)
-                        no_bid = NoBid(task.task_id, self.robot_id, self.round.round_id)
-                        self.round.no_bids.append(no_bid)
+
+                if self.robot_is_eligible(task):
+                    self.compute_bids(task)
+
             except IndexError:
                 # A bid for all tasks in the task_announcement has be computed
-                self.task_announcement = None
-                smallest_bid = self.get_smallest_bid(self.round.bids)
-                self.send_bids(smallest_bid, self.round.no_bids)
+                self.place_bids()
+
+    def robot_is_eligible(self, task):
+        return all(i in self.capabilities for i in task.capabilities) and\
+               not task.request.eligible_robots or self.robot_id in task.request.eligible_robots
+
+    def compute_bids(self, task):
+        bid = self.compute_bid(task)
+        if bid is not None:
+            self.logger.debug("Best bid %s", bid)
+            self.round.bids.append(bid)
+        else:
+            self.logger.warning("No bid for task %s", task.task_id)
+            no_bid = NoBid(task.task_id, self.robot_id, self.round.round_id)
+            self.round.no_bids.append(no_bid)
 
     def compute_bid(self, task):
         start_time = time.time()
@@ -106,47 +118,21 @@ class Bidder:
 
             prev_location = self.get_previous_location(insertion_point)
             travel_time = self.get_travel_time(task, prev_location)
-            if travel_time is None:
-                self.logger.warning("There was a problem computing the estimated duration between %s and %s "
-                                    "Not computing bid for insertion point %s",
-                                    prev_location, task.request.start_location, insertion_point)
-                continue
 
             prev_task_is_frozen = self.previous_task_is_frozen(insertion_point)
-            new_stn_task = self.timetable.to_stn_task(task, travel_time, insertion_point,
-                                                      self.task_announcement.closure_time,
-                                                      prev_task_is_frozen)
+            new_stn_task = self.timetable.to_stn_task(task,
+                                                 travel_time,
+                                                 insertion_point,
+                                                 self.task_announcement.closure_time,
+                                                 prev_task_is_frozen)
 
             self.timetable.insert_task(new_stn_task, insertion_point)
             allocation_info = AllocationInfo(insertion_point, new_stn_task)
 
             try:
-                # Update previous location and start constraints of next task (if any)
-                next_task_id = self.timetable.get_task_id(insertion_point+1)
-                next_task = self.tasks.get(next_task_id)
-                self.logger.debug("Updating previous location and start constraints of task %s, ", next_task.task_id)
-                prev_version_next_stn_task = self.timetable.get_stn_task(next_task.task_id)
-
-                prev_location = self.get_previous_location(insertion_point+1)
-                travel_time = self.get_travel_time(next_task, prev_location)
-
-                if travel_time is None:
-                    self.logger.warning("There was a problem computing the estimated duration between %s and %s "
-                                        "Not computing bid for insertion point %s",
-                                        prev_location, next_task.request.start_location, insertion_point)
-                    continue
-
-                prev_task_is_frozen = self.previous_task_is_frozen(insertion_point+1)
-                next_stn_task = self.timetable.update_stn_task(copy.deepcopy(prev_version_next_stn_task),
-                                                               travel_time,
-                                                               insertion_point+1,
-                                                               self.task_announcement.closure_time,
-                                                               prev_task_is_frozen)
-                self.timetable.update_task(next_stn_task)
-
+                next_stn_task, prev_version_next_stn_task = self.get_next_stn_task(insertion_point)
                 allocation_info.update_next_task(next_stn_task, prev_version_next_stn_task)
-
-            except TaskNotFound as e:
+            except TaskNotFound:
                 pass
 
             stn = copy.deepcopy(self.timetable.stn)
@@ -179,6 +165,47 @@ class Bidder:
 
         return best_bid
 
+    def get_next_stn_task(self, insertion_point):
+        try:
+            # Update previous location and start constraints of next task (if any)
+            next_task_id = self.timetable.get_task_id(insertion_point + 1)
+            next_task = self.tasks.get(next_task_id)
+            self.logger.debug("Updating previous location and start constraints of task %s, ", next_task.task_id)
+            prev_version_next_stn_task = self.timetable.get_stn_task(next_task.task_id)
+
+            prev_location = self.get_previous_location(insertion_point + 1)
+            travel_time = self.get_travel_time(next_task, prev_location)
+
+            prev_task_is_frozen = self.previous_task_is_frozen(insertion_point + 1)
+            next_stn_task = self.timetable.update_stn_task(copy.deepcopy(prev_version_next_stn_task),
+                                                           travel_time,
+                                                           insertion_point + 1,
+                                                           self.task_announcement.closure_time,
+                                                           prev_task_is_frozen)
+            self.timetable.update_task(next_stn_task)
+
+            return next_stn_task, prev_version_next_stn_task
+
+        except TaskNotFound as e:
+            raise e
+
+    def place_bids(self):
+        self.task_announcement = None
+        smallest_bid = self.get_smallest_bid(self.round.bids)
+        self.send_bids(smallest_bid, self.round.no_bids)
+
+    def finish_round(self):
+        no_bids = list()
+        for bid in self.round.bids:
+            no_bid = NoBid(bid.task_id, self.robot_id, self.round.round_id)
+            no_bids.append(no_bid)
+        for task in self.task_announcement.tasks:
+            if self.robot_is_eligible(task):
+                no_bid = NoBid(task.task_id, self.robot_id, self.round.round_id)
+                no_bids.append(no_bid)
+        self.task_announcement = None
+        self.send_bids(no_bids=no_bids)
+
     def task_contract_cb(self, msg):
         payload = msg['payload']
         task_contract = TaskContract.from_payload(payload)
@@ -194,7 +221,7 @@ class Bidder:
                                     self.round.bid_placed)
                 self.send_contract_acknowledgement(task_contract, accept=False)
 
-    def send_bids(self, bid, no_bids):
+    def send_bids(self, bid=None, no_bids=None):
         """ Sends the bid with the smallest cost
         Sends a no-bid per task that could not be accommodated in the stn
 
