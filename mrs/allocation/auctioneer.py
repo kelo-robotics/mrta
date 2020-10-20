@@ -187,16 +187,8 @@ class Auctioneer(SimulatorInterface):
         eligible_robots = dict()
 
         for task in tasks:
-            if not self.is_valid_time(task.start_constraint.latest_time):
-                if self.alternative_timeslots:
-                    task.hard_constraints = False
-                    self.logger.warning("Setting soft constraints for task %s", task.task_id)
-                else:
-                    self.logger.warning("Task %s cannot not be allocated at its given temporal constraints",
-                                        task.task_id)
-                    task.update_status(TaskStatusConst.CANCELED)
-                    self.tasks_to_allocate.pop(task.task_id)
-                    continue
+            if not self.is_task_valid(task):
+                continue
 
             eligible_robots_for_task = self.get_eligible_robots(task)
 
@@ -233,6 +225,25 @@ class Auctioneer(SimulatorInterface):
         self.round.start()
         self.api.publish(msg, groups=['TASK-ALLOCATION'])
 
+    def is_task_valid(self, task):
+        validity = True
+
+        if not self.is_valid_time(task.start_constraint.earliest_time):
+
+            if self.alternative_timeslots:
+                task.hard_constraints = False
+                self.logger.warning("Setting soft constraints for task %s", task.task_id)
+                self.update_soft_constraints(task)
+
+            elif not self.alternative_timeslots:
+                self.logger.warning("Task %s cannot not be allocated at its given temporal constraints",
+                                    task.task_id)
+                task.update_status(TaskStatusConst.CANCELED)
+                self.tasks_to_allocate.pop(task.task_id)
+                validity = False
+
+        return validity
+
     def get_eligible_robots(self, task):
         capable_robots = self.get_capable_robots(task)
         if task.request.eligible_robots:
@@ -260,9 +271,9 @@ class Auctioneer(SimulatorInterface):
         return closure_time
 
     def update_soft_constraints(self, task):
+        self.logger.warning("Updating temporal constraints of task %s to ASAP", task.task_id)
         start_time_window = task.start_constraint.latest_time - task.start_constraint.earliest_time
-
-        earliest_start_time = self.get_current_time() + timedelta(minutes=5)
+        earliest_start_time = self.get_current_time() + timedelta(minutes=1)
         latest_start_time = earliest_start_time + start_time_window
         task.update_start_constraint(earliest_start_time, latest_start_time)
 
