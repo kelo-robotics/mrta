@@ -303,13 +303,13 @@ class TimetableManager(dict):
         return self.get(robot_id)
 
     def register_robot(self, robot):
-        self.logger.debug("Registering robot %s", robot.robot_id)
+        self.logger.debug("Loading timetable of robot %s", robot.robot_id)
         timetable = Timetable(robot.robot_id, self.stp_solver, simulator=self.simulator)
         timetable.fetch()
         self[robot.robot_id] = timetable
         timetable.store()
-        self.logger.debug("STN: \n %s", timetable.stn)
-        self.logger.debug("Dispatchable graph: \n %s", timetable.dispatchable_graph)
+        self.logger.debug("STN robot %s: %s", robot.robot_id, timetable.stn)
+        self.logger.debug("Dispatchable graph robot %s: %s", robot.robot_id, timetable.dispatchable_graph)
 
     def unregister_robot(self, robot):
         self.pop(robot.robot_id)

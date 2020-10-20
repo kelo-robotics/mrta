@@ -57,7 +57,6 @@ class Auctioneer(SimulatorInterface):
     def register_robot(self, robot):
         self.logger.debug("Registering robot %s", robot.robot_id)
         self.robots[robot.robot_id] = robot
-        self.timetable_manager.register_robot(robot)
 
     def unregister_robot(self, robot):
         self.logger.warning("Unregistering robot %s", robot.robot_id)
