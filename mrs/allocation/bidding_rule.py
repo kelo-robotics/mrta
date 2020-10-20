@@ -35,9 +35,6 @@ class BiddingRuleBase:
             dispatchable_graph = self.timetable.compute_dispatchable_graph(stn)
             metrics = self.compute_metrics(dispatchable_graph, allocation_info=allocation_info)
 
-            print("stn: ", stn)
-            print("dispatchable graph: ", dispatchable_graph)
-
             r_earliest_departure_time = dispatchable_graph.get_time(task.task_id, "departure")
             r_latest_departure_time = dispatchable_graph.get_time(task.task_id, "departure", lower_bound=False)
             earliest_departure_time = self.timetable.ztp + timedelta(seconds=r_earliest_departure_time)
