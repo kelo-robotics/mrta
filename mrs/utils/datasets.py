@@ -2,8 +2,7 @@ import collections
 from datetime import datetime, timedelta
 
 from fmlib.models.requests import TransportationRequest
-from fmlib.models.tasks import TimepointConstraint, Duration, TemporalConstraints
-from fmlib.models.tasks import TransportationTask, TaskConstraints
+from fmlib.models.tasks import TransportationTask
 from mrs.utils.utils import load_yaml_file_from_module
 
 
@@ -25,16 +24,7 @@ def load_tasks_to_db(dataset_module, dataset_name, **kwargs):
                                         latest_pickup_time=latest_pickup_time,
                                         hard_constraints=task_info.get('hard_constraints'))
 
-        pickup = TimepointConstraint(earliest_time=request.earliest_pickup_time,
-                                     latest_time=request.latest_pickup_time)
-
-        temporal = TemporalConstraints(start=pickup,
-                                       work_time=Duration(),
-                                       travel_time=Duration())
-
-        constraints = TaskConstraints(hard=request.hard_constraints, temporal=temporal)
-
-        task = TransportationTask.create_new(task_id=task_id, request=request, constraints=constraints)
+        task = TransportationTask.from_request(request)
 
         tasks.append(task)
 
