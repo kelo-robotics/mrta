@@ -158,25 +158,32 @@ class AllocationInfo(AsDictMixin):
 class EligibleRobot:
     def __init__(self, robot_id):
         self.robot_id = robot_id
-        self.tasks = list()  # tasks for which the robot can place a bid
+        self.task_ids = list()  # tasks for which the robot can place a bid
         self.bids = list()
         self.no_bids = list()
 
     def __str__(self):
         to_print = ""
-        to_print += "{}, bids: {}, no_bids:{}".format(self.robot_id, self.bids, self.no_bids)
+        to_print += "robot {}, tasks:{}, bids: {}, no_bids:{}".format(self.robot_id, self.task_ids, self.bids, self.no_bids)
         return to_print
 
     def add_task(self, task):
-        self.tasks.append(task)
+        self.task_ids.append(task.task_id)
 
-    def update(self, bid):
+    def remove_task(self, task):
+        self.task_ids.remove(task.task_id)
+
+    def process_bid(self, bid):
         if isinstance(bid, NoBid):
             self.no_bids.append(bid)
         else:
             self.bids.append(bid)
 
+    def clean(self):
+        self.bids = list()
+        self.no_bids = list()
+
     def placed_bid(self):
-        if len(self.bids) == 1 or len(self.no_bids) == len(self.tasks):
+        if len(self.bids) == 1 or len(self.no_bids) == len(self.task_ids):
             return True
         return False

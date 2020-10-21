@@ -82,7 +82,7 @@ class Round(SimulatorInterface):
                     self.update_task_bid(bid, self.received_bids[bid.task_id]):
                 self.received_bids[bid.task_id] = bid
 
-        self.eligible_robots[bid.robot_id].update(bid)
+        self.eligible_robots[bid.robot_id].process_bid(bid)
 
     @staticmethod
     def update_task_bid(new_bid, old_bid):

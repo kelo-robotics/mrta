@@ -30,6 +30,7 @@ class Auctioneer(SimulatorInterface):
         self.api = kwargs.get('api')
         self.ccu_store = kwargs.get('ccu_store')
         self.robots = dict()
+        self.eligible_robots = dict()
         self.timetable_manager = timetable_manager
 
         self.closure_window = timedelta(seconds=closure_window)
@@ -45,6 +46,7 @@ class Auctioneer(SimulatorInterface):
         self.waiting_for_user_confirmation = list()
         self.round = Round(list(), self.tasks_to_allocate)
         self.no_robots_registered_warning = False
+        self.no_robots_eligible_warning = list()
 
     def configure(self, **kwargs):
         api = kwargs.get('api')
@@ -57,14 +59,37 @@ class Auctioneer(SimulatorInterface):
     def register_robot(self, robot):
         self.logger.debug("Registering robot %s", robot.robot_id)
         self.robots[robot.robot_id] = robot
+        self.eligible_robots[robot.robot_id] = EligibleRobot(robot.robot_id)
+
+        for task_id, task in self.tasks_to_allocate.items():
+            if robot.is_capable(task):
+                self.logger.debug("Robot %s is capable of performing task %s", robot.robot_id, task_id)
+                task.capable_robots.append(robot)
+            if robot.is_eligible(task):
+                self.logger.debug("Robot %s is eligible for performing task %s", robot.robot_id, task_id)
+                task.eligible_robots.append(task)
+                self.eligible_robots[robot.robot_id].add_task(task)
 
     def unregister_robot(self, robot):
         self.logger.warning("Unregistering robot %s", robot.robot_id)
+
+        for task_id, task in self.tasks_to_allocate.items():
+            if robot.robot_id in task.capable_robots:
+                self.logger.debug("Removing robot %s from capable robots for task %s", robot.robot_id, task_id)
+                task.capable_robots.remove(robot.robot_id)
+            if robot.robot_id in task.eligible_robots:
+                self.logger.debug("Removing robot %s from eligible robots for task %s", robot.robot_id, task_id)
+                task.eligible_robots.remove(robot.robot_id)
+                self.eligible_robots[robot.robot_id].remove_task(task)
+
         self.robots.pop(robot.robot_id)
+        self.eligible_robots.pop(robot.robot_id)
+
         tasks_to_re_allocate = [task for task_id, task in self.allocated_tasks.items() if robot.robot_id in
                                 task.assigned_robots]
         self.logger.warning("The following tasks will be re-allocated: %s",
                             [task.task_id for task in tasks_to_re_allocate])
+
         return tasks_to_re_allocate
 
     def set_ztp(self, time_):
@@ -79,9 +104,10 @@ class Auctioneer(SimulatorInterface):
                     self.no_robots_registered_warning = True
                 return
 
-            tasks = list(self.tasks_to_allocate.values())
             self.no_robots_registered_warning = False
-            self.announce_tasks(tasks)
+            tasks = self.get_tasks_to_announce(list(self.tasks_to_allocate.values()))
+            if tasks:
+                self.announce_tasks(tasks)
 
         if self.round.opened and self.round.time_to_close():
             try:
@@ -169,58 +195,64 @@ class Auctioneer(SimulatorInterface):
         self.finish_round()
 
     def allocate(self, tasks):
+        tasks_to_allocate = dict()
         if isinstance(tasks, list):
             self.logger.debug("Auctioneer received a list of tasks")
             for task in tasks:
-                self.tasks_to_allocate[task.task_id] = task
+                self.add_task_to_allocate(task)
+                tasks_to_allocate[task.task_id] = task
         else:
-            self.logger.debug("Auctioneer received one task")
-            self.tasks_to_allocate[tasks.task_id] = tasks
-        self.logger.debug("Tasks to allocate %s", {task_id for (task_id, task) in self.tasks_to_allocate.items()})
+            self.add_task_to_allocate(tasks)
+            tasks_to_allocate[tasks.task_id] = tasks
+
+        self.tasks_to_allocate = tasks_to_allocate
+
+    def add_task_to_allocate(self, task):
+        task.eligible_robots = self.get_eligible_robots(task)
+        for robot_id in task.eligible_robots:
+            self.eligible_robots[robot_id].add_task(task)
 
     def finish_round(self):
         self.logger.debug("Finishing round %s", self.round.id)
         self.round.finish()
 
-    def announce_tasks(self, tasks):
+    def get_tasks_to_announce(self, tasks):
         tasks_to_announce = list()
-        eligible_robots = dict()
 
         for task in tasks:
             if not self.is_task_valid(task):
                 continue
 
-            eligible_robots_for_task = self.get_eligible_robots(task)
-
-            if not eligible_robots_for_task:
-                self.logger.warning("No eligible robots for task. "
-                                    "Task %s is not announced.", task.task_id)
+            if not task.eligible_robots:
+                if task.task_id not in self.no_robots_eligible_warning:
+                    self.logger.warning("No eligible robots for task. "
+                                        "Task %s is not announced.", task.task_id)
+                    self.no_robots_eligible_warning.append(task.task_id)
                 continue
 
-            for robot_id in eligible_robots_for_task:
-                if robot_id not in eligible_robots:
-                    eligible_robots[robot_id] = EligibleRobot(robot_id)
-                eligible_robots[robot_id].add_task(task.task_id)
+            if task.task_id in self.no_robots_eligible_warning:
+                self.no_robots_eligible_warning.remove(task.task_id)
 
-                if task not in tasks_to_announce:
-                    tasks_to_announce.append(task)
+            tasks_to_announce.append(task)
 
-        if not tasks_to_announce:
-            return
+        return tasks_to_announce
+
+    def announce_tasks(self, tasks):
+        for eligible_robot in self.eligible_robots.values():
+            eligible_robot.clean()
 
         closure_time = self.get_current_time() + self.closure_window
         self.changed_timetable.clear()
 
-        self.round = Round(eligible_robots,
+        self.round = Round(self.eligible_robots,
                            self.tasks_to_allocate,
                            closure_time=closure_time,
                            alternative_timeslots=self.alternative_timeslots,
                            simulator=self.simulator)
 
-        self.logger.debug("Auctioneer announces tasks %s", [task.task_id for task in tasks_to_announce])
-        self.logger.debug("Eligible robots: %s", list(eligible_robots.keys()))
+        self.logger.debug("Auctioneer announces %s tasks", len(tasks))
 
-        task_announcement = TaskAnnouncement(tasks_to_announce, self.round.id, self.timetable_manager.ztp, closure_time)
+        task_announcement = TaskAnnouncement(tasks, self.round.id, self.timetable_manager.ztp, closure_time)
         msg = self.api.create_message(task_announcement)
         self.round.start()
         self.api.publish(msg, groups=['TASK-ALLOCATION'])
@@ -228,7 +260,7 @@ class Auctioneer(SimulatorInterface):
     def is_task_valid(self, task):
         validity = True
 
-        if not self.is_valid_time(task.start_constraint.earliest_time):
+        if not self.is_valid_time(task.start_constraint.latest_time):
 
             if self.alternative_timeslots:
                 task.hard_constraints = False
@@ -245,18 +277,18 @@ class Auctioneer(SimulatorInterface):
         return validity
 
     def get_eligible_robots(self, task):
-        capable_robots = self.get_capable_robots(task)
+        task.capable_robots = self.get_capable_robots(task)
         if task.request.eligible_robots:
-            eligible_robots = [robot_id for robot_id in capable_robots if robot_id in task.request.eligible_robots]
+            eligible_robots = [robot_id for robot_id in task.capable_robots if robot_id in task.request.eligible_robots]
         else:
-            eligible_robots = capable_robots
+            eligible_robots = task.capable_robots
         self.logger.debug("Eligible robots for task %s: %s", task.task_id, eligible_robots)
         return eligible_robots
 
     def get_capable_robots(self, task):
         capable_robots = list()
         for robot_id, robot in self.robots.items():
-            if all(i in robot.capabilities for i in task.capabilities):
+            if robot.is_capable(task):
                 capable_robots.append(robot_id)
         self.logger.debug("Capable robots for task %s: %s", task.task_id, capable_robots)
         return capable_robots
