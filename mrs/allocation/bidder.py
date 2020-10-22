@@ -112,19 +112,20 @@ class Bidder:
         for insertion_point in insertion_points:
             prev_version_next_stn_task = None
 
-            self.logger.debug("Computing bid for task %s in insertion_point %s", task.task_id, insertion_point)
             if not self.insert_in(insertion_point):
                 continue
+
+            self.logger.debug("Computing bid for task %s in insertion_point %s", task.task_id, insertion_point)
 
             prev_location = self.get_previous_location(insertion_point)
             travel_time = self.get_travel_time(task, prev_location)
 
             prev_task_is_frozen = self.previous_task_is_frozen(insertion_point)
             new_stn_task = self.timetable.to_stn_task(task,
-                                                 travel_time,
-                                                 insertion_point,
-                                                 self.task_announcement.closure_time,
-                                                 prev_task_is_frozen)
+                                                      travel_time,
+                                                      insertion_point,
+                                                      self.task_announcement.closure_time,
+                                                      prev_task_is_frozen)
 
             self.timetable.insert_task(new_stn_task, insertion_point)
             allocation_info = AllocationInfo(insertion_point, new_stn_task)
@@ -364,7 +365,7 @@ class Bidder:
         self.timetable.stn = allocation_info.stn
         self.timetable.dispatchable_graph = allocation_info.dispatchable_graph
 
-        self.logger.debug("Robot %s allocated task %s", self.robot_id, task_id)
+        self.logger.debug("Robot %s allocated task %s in insertion point %s", self.robot_id, task_id, allocation_info.insertion_point)
         self.logger.debug("STN: \n %s", self.timetable.stn)
         self.logger.debug("Dispatchable graph: \n %s", self.timetable.dispatchable_graph)
 
