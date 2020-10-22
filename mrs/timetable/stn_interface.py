@@ -63,6 +63,7 @@ class STNInterface:
         departure_timepoint = self.get_departure_timepoint(start_timepoint, travel_edge, insertion_point, earliest_admissible_time,
                                                    previous_task_is_frozen)
         stn_task.update_timepoint("departure", departure_timepoint.r_earliest_time, departure_timepoint.r_latest_time)
+        stn_task.update_edge(travel_edge.name, travel_edge.mean, travel_edge.variance)
         return stn_task
 
     def get_departure_timepoint(self, start_timepoint, travel_edge, insertion_point, earliest_admissible_time, previous_task_is_frozen):
