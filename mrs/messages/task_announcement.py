@@ -5,7 +5,7 @@ from ropod.utils.uuid import generate_uuid
 
 
 class TaskAnnouncement(AsDictMixin):
-    def __init__(self, tasks, round_id, ztp, closure_time):
+    def __init__(self, tasks, round_id, ztp):
         """
         Constructor for the TaskAnnouncement object
 
@@ -22,7 +22,6 @@ class TaskAnnouncement(AsDictMixin):
         else:
             self.round_id = round_id
 
-        self.closure_time = closure_time
         self.ztp = ztp
 
     def to_dict(self):

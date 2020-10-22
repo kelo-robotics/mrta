@@ -124,18 +124,7 @@ class Auctioneer(SimulatorInterface):
 
     def process_round_result(self, round_result):
         self.winning_bid, self.tasks_to_allocate = round_result
-
-        earliest_departure_time_is_valid = \
-            self.is_valid_time(self.winning_bid.departure_time.earliest_time)
-
-        latest_departure_time_is_valid = \
-            self.is_valid_time(self.winning_bid.departure_time.latest_time)
-
-        if earliest_departure_time_is_valid or latest_departure_time_is_valid:
-            self.send_task_contract(self.winning_bid.task_id, self.winning_bid.robot_id)
-        else:
-            self.logger.warning("The departure time of task %s is invalid", self.winning_bid.task_id)
-            self.finish_round()
+        self.send_task_contract(self.winning_bid.task_id, self.winning_bid.robot_id)
 
     def process_alternative_timeslot(self, exception):
         bid = exception.bid
@@ -252,7 +241,7 @@ class Auctioneer(SimulatorInterface):
 
         self.logger.debug("Auctioneer announces %s tasks", len(tasks))
 
-        task_announcement = TaskAnnouncement(tasks, self.round.id, self.timetable_manager.ztp, closure_time)
+        task_announcement = TaskAnnouncement(tasks, self.round.id, self.timetable_manager.ztp)
         msg = self.api.create_message(task_announcement)
         self.round.start()
         self.api.publish(msg, groups=['TASK-ALLOCATION'])

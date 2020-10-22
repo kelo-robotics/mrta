@@ -124,7 +124,6 @@ class Bidder:
             new_stn_task = self.timetable.to_stn_task(task,
                                                       travel_time,
                                                       insertion_point,
-                                                      self.task_announcement.closure_time,
                                                       prev_task_is_frozen)
 
             self.timetable.insert_task(new_stn_task, insertion_point)
@@ -178,10 +177,10 @@ class Bidder:
             travel_time = self.get_travel_time(next_task, prev_location)
 
             prev_task_is_frozen = self.previous_task_is_frozen(insertion_point + 1)
-            next_stn_task = self.timetable.update_stn_task(copy.deepcopy(prev_version_next_stn_task),
+            next_stn_task = self.timetable.update_stn_task(next_task,
+                                                           copy.deepcopy(prev_version_next_stn_task),
                                                            travel_time,
                                                            insertion_point + 1,
-                                                           self.task_announcement.closure_time,
                                                            prev_task_is_frozen)
             self.timetable.update_task(next_stn_task)
 
