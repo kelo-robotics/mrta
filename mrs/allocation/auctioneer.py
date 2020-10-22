@@ -157,6 +157,10 @@ class Auctioneer(SimulatorInterface):
 
         self.allocated_tasks[task.task_id] = task
 
+        for robot in self.eligible_robots.values():
+            if task.task_id in robot.task_ids:
+                robot.remove_task(task)
+
         allocation = (self.winning_bid.task_id, [self.winning_bid.robot_id])
         self.logger.debug("Allocation: %s", allocation)
         self.logger.debug("Tasks to allocate %s", [task_id for task_id, task in self.tasks_to_allocate.items()])
