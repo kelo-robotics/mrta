@@ -1,11 +1,9 @@
 import copy
-import uuid
 import logging
 from datetime import timedelta
 
+from fmlib.models.tasks import Task
 from fmlib.models.tasks import TimepointConstraint
-from stn.stp import STP
-
 from fmlib.models.timetable import Timetable as TimetableMongo
 from mrs.exceptions.allocation import InvalidAllocation
 from mrs.exceptions.allocation import TaskNotFound
@@ -13,13 +11,13 @@ from mrs.exceptions.execution import InconsistentAssignment
 from mrs.messages.d_graph_update import DGraphUpdate
 from mrs.simulation.simulator import SimulatorInterface
 from mrs.timetable.stn_interface import STNInterface
+from mrs.utils.time import to_timestamp
 from pymodm.errors import DoesNotExist
 from ropod.utils.timestamp import TimeStamp
 from stn.exceptions.stp import NoSTPSolution
 from stn.methods.fpc import get_minimal_network
+from stn.stp import STP
 from stn.task import Task as STNTask
-
-from mrs.utils.time import to_timestamp
 
 
 class Timetable(STNInterface):
@@ -216,6 +214,45 @@ class Timetable(STNInterface):
         sub_stn = self.stn.get_subgraph(n_tasks)
         sub_dispatchable_graph = self.dispatchable_graph.get_subgraph(n_tasks)
         return DGraphUpdate(robot_id, self.ztp, sub_stn, sub_dispatchable_graph)
+
+    def get_tasks_for_timetable_update(self):
+        tasks = list()
+        task_ids = list()
+        for i in sorted(self.dispatchable_graph.nodes()):
+            node_data = self.dispatchable_graph.nodes[i]['data']
+            if node_data.task_id not in task_ids \
+                    and node_data.node_type != 'zero_timepoint':
+
+                task = Task.get_task(node_data.task_id)
+                task_dict = {"task_id": str(task.task_id),
+                             "type": task.type,
+                             "status": task.status.status,
+                             }
+
+                departure_times = self.dispatchable_graph.get_times(task.task_id, "departure")
+                start_times = self.dispatchable_graph.get_times(task.task_id, "start")
+                finish_times = self.dispatchable_graph.get_times(task.task_id, "finish")
+
+                if departure_times:
+                    departure = self.get_timepoint_dict(departure_times)
+                    task_dict.update(departure=departure)
+
+                if start_times:
+                    start = self.get_timepoint_dict(start_times)
+                    task_dict.update(start=start)
+
+                if finish_times:
+                    finish = self.get_timepoint_dict(finish_times)
+                    task_dict.update(finish=finish)
+
+                tasks.append(task_dict)
+                task_ids.append(task.task_id)
+        return tasks
+
+    def get_timepoint_dict(self, times_):
+        return {"earliest": TimeStamp.to_str(to_timestamp(self.ztp, times_[0])),
+                "latest": TimeStamp.to_str(to_timestamp(self.ztp, times_[1]))
+                }
 
     def to_dict(self):
         timetable_dict = dict()
