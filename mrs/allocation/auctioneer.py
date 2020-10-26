@@ -256,8 +256,9 @@ class Auctioneer(SimulatorInterface):
         if not self.is_valid_time(task.start_constraint.latest_time):
 
             if self.alternative_timeslots:
-                task.hard_constraints = False
-                self.logger.warning("Setting soft constraints for task %s", task.task_id)
+                if task.hard_constraints:
+                    self.logger.warning("Setting soft constraints for task %s", task.task_id)
+                    task.hard_constraints = False
                 self.update_soft_constraints(task)
 
             elif not self.alternative_timeslots:
