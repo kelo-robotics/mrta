@@ -80,7 +80,7 @@ class Bidder:
             try:
                 task = self.task_announcement.tasks.pop(0)
 
-                if self.robot_is_eligible(task):
+                if self.robot_id in task.eligible_robots:
                     self.compute_bids(task)
 
             except IndexError:
