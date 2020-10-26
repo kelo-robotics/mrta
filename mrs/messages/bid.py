@@ -158,7 +158,7 @@ class AllocationInfo(AsDictMixin):
 class EligibleRobot:
     def __init__(self, robot_id):
         self.robot_id = robot_id
-        self.task_ids = list()  # tasks for which the robot can place a bid
+        self.task_ids = set()  # tasks for which the robot can place a bid
         self.bids = list()
         self.no_bids = list()
 
@@ -168,7 +168,7 @@ class EligibleRobot:
         return to_print
 
     def add_task(self, task):
-        self.task_ids.append(task.task_id)
+        self.task_ids.add(task.task_id)
 
     def remove_task(self, task):
         self.task_ids.remove(task.task_id)

@@ -58,17 +58,19 @@ class Auctioneer(SimulatorInterface):
 
     def register_robot(self, robot):
         self.logger.debug("Registering robot %s", robot.robot_id)
-        self.robots[robot.robot_id] = robot
         self.eligible_robots[robot.robot_id] = EligibleRobot(robot.robot_id)
 
         for task_id, task in self.tasks_to_allocate.items():
-            if robot.is_capable(task):
+            if robot.is_capable(task) and robot.robot_id not in task.capable_robots:
                 self.logger.debug("Robot %s is capable of performing task %s", robot.robot_id, task_id)
-                task.capable_robots.append(robot)
-            if robot.is_eligible(task):
+                task.capable_robots.append(robot.robot_id)
+            if robot.is_eligible(task) and robot.robot_id not in task.eligible_robots:
                 self.logger.debug("Robot %s is eligible for performing task %s", robot.robot_id, task_id)
-                task.eligible_robots.append(task)
+                task.eligible_robots.append(robot.robot_id)
                 self.eligible_robots[robot.robot_id].add_task(task)
+            task.save()
+
+        self.robots[robot.robot_id] = robot
 
     def unregister_robot(self, robot):
         self.logger.warning("Unregistering robot %s", robot.robot_id)
@@ -195,6 +197,7 @@ class Auctioneer(SimulatorInterface):
                 self.add_task_to_allocate(task)
                 tasks_to_allocate[task.task_id] = task
         else:
+            self.logger.debug("Auctioneer received a task")
             self.add_task_to_allocate(tasks)
             tasks_to_allocate[tasks.task_id] = tasks
 
@@ -202,6 +205,7 @@ class Auctioneer(SimulatorInterface):
 
     def add_task_to_allocate(self, task):
         task.eligible_robots = self.get_eligible_robots(task)
+        task.save()
         for robot_id in task.eligible_robots:
             self.eligible_robots[robot_id].add_task(task)
 
@@ -243,7 +247,7 @@ class Auctioneer(SimulatorInterface):
                            alternative_timeslots=self.alternative_timeslots,
                            simulator=self.simulator)
 
-        self.logger.debug("Auctioneer announces %s tasks", len(tasks))
+        self.logger.debug("Auctioneer announces tasks %s", [task.task_id for task in tasks])
 
         task_announcement = TaskAnnouncement(tasks, self.round.id, self.timetable_manager.ztp)
         msg = self.api.create_message(task_announcement)
