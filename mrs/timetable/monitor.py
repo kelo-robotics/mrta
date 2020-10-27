@@ -19,7 +19,7 @@ from stn.exceptions.stp import NoSTPSolution
 
 class TimetableMonitorBase:
     def __init__(self, **kwargs):
-        self.task_manager = kwargs.get("timetable_manager")
+        self.timetable_manager = kwargs.get("timetable_manager")
         self.timetable = kwargs.get("timetable")
         self.d_graph_watchdog = kwargs.get("d_graph_watchdog", False)
         self.api = kwargs.get('api')
@@ -35,8 +35,8 @@ class TimetableMonitorBase:
         self.tasks = tasks
 
     def get_timetable(self, robot_id):
-        if self.task_manager:
-            return self.task_manager.get_timetable(robot_id)
+        if self.timetable_manager:
+            return self.timetable_manager.get_timetable(robot_id)
         elif self.timetable:
             return self.timetable
 
