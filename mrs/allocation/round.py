@@ -20,13 +20,13 @@ class RoundBidder:
 
 class Round(SimulatorInterface):
 
-    def __init__(self, eligible_robots, tasks_to_allocate, **kwargs):
+    def __init__(self, eligible_robots, tasks, **kwargs):
         simulator = kwargs.get('simulator')
         super().__init__(simulator)
 
         self.logger = logging.getLogger('mrs.auctioneer.round')
         self.eligible_robots = eligible_robots
-        self.tasks_to_allocate = tasks_to_allocate
+        self.tasks = tasks
 
         self.closure_time = kwargs.get('closure_time')
         self.alternative_timeslots = kwargs.get('alternative_timeslots', False)
@@ -132,33 +132,22 @@ class Round(SimulatorInterface):
         tasks_to_allocate (dict): tasks left to allocate
 
         """
-        self.get_result_no_bids()
 
         try:
             winning_bid = self.elect_winner()
-            round_result = (winning_bid, self.tasks_to_allocate)
 
             if winning_bid.alternative_start_time:
-                raise AlternativeTimeSlot(winning_bid, self.tasks_to_allocate)
+                raise AlternativeTimeSlot(winning_bid)
 
-            return round_result
+            return winning_bid
 
         except NoAllocation as e:
-            raise NoAllocation(e.round_id, e.tasks_to_allocate)
+            raise NoAllocation(e.round_id)
 
     def finish(self):
         self.opened = False
         self.finished = True
         self.logger.debug("Round %s finished", self.id)
-
-    def get_result_no_bids(self):
-        for task_id, n_no_bids in self.received_no_bids.items():
-            if task_id not in self.received_bids:
-                task = self.tasks_to_allocate.get(task_id)
-                if task.constraints.hard and self.alternative_timeslots:
-                    task.hard_constraints = False
-                    self.tasks_to_allocate[task.task_id] = task
-                    self.logger.debug("Setting soft constraints for task %s", task_id)
 
     def elect_winner(self):
         """ Elects the winner of the round
@@ -177,7 +166,7 @@ class Round(SimulatorInterface):
                 lowest_bid = copy.deepcopy(bid)
 
         if lowest_bid is None:
-            raise NoAllocation(self.id, self.tasks_to_allocate)
+            raise NoAllocation(self.id)
 
         return lowest_bid
 

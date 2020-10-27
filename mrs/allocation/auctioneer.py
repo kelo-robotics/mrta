@@ -113,24 +113,21 @@ class Auctioneer(SimulatorInterface):
 
         if self.round.opened and self.round.time_to_close():
             try:
-                round_result = self.round.get_result()
-                self.process_round_result(round_result)
+                self.winning_bid = self.round.get_result()
+                self.process_winning_bid()
 
             except NoAllocation as e:
                 self.logger.warning("No allocation made in round %s ", e.round_id)
-                self.tasks_to_allocate = e.tasks_to_allocate
                 self.finish_round()
 
             except AlternativeTimeSlot as e:
                 self.process_alternative_timeslot(e)
 
-    def process_round_result(self, round_result):
-        self.winning_bid, self.tasks_to_allocate = round_result
+    def process_winning_bid(self):
         self.send_task_contract(self.winning_bid.task_id, self.winning_bid.robot_id)
 
     def process_alternative_timeslot(self, exception):
         bid = exception.bid
-        self.tasks_to_allocate = exception.tasks_to_allocate
         alternative_allocation = (bid.task_id, [bid.robot_id], bid.alternative_start_time)
 
         self.logger.debug("Alternative timeslot for task %s: robot %s, alternative start time: %s ", bid.task_id,
@@ -177,7 +174,7 @@ class Auctioneer(SimulatorInterface):
 
         self.allocations.append(allocation)
         task_performance = TaskPerformance.get_task(self.winning_bid.task_id)
-        task_performance.update_allocation(self.round.id, self.round.time_to_allocate)
+        task_performance.update_allocation(self.round.id, self.round.time_to_allocate, self.round.tasks)
         robot_performance = RobotPerformance.get_robot(self.winning_bid.robot_id, api=self.api)
         robot_performance.update_timetables(timetable)
         self.finish_round()
@@ -242,7 +239,7 @@ class Auctioneer(SimulatorInterface):
         self.changed_timetable.clear()
 
         self.round = Round(self.eligible_robots,
-                           self.tasks_to_allocate,
+                           [task.task_id for task in tasks],
                            closure_time=closure_time,
                            alternative_timeslots=self.alternative_timeslots,
                            simulator=self.simulator)
