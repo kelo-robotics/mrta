@@ -68,15 +68,15 @@ class SimulatorInterface:
         if self.simulator:
             return self.simulator.is_valid_time(time_)
         else:
-            if time_ > datetime.now():
+            if time_ > TimeStamp().to_datetime():
                 return True
             return False
 
     def get_current_time(self):
         if self.simulator:
-            return self.simulator.current_time
+            return TimeStamp.from_datetime(self.simulator.current_time)
         else:
-            return datetime.now()
+            return TimeStamp()
 
     def get_current_timestamp(self):
         if self.simulator:
@@ -85,9 +85,9 @@ class SimulatorInterface:
             return TimeStamp()
 
     def init_ztp(self):
-        midnight = self.get_current_time().replace(hour=0, minute=0, second=0, microsecond=0)
-        ztp = TimeStamp()
-        ztp.timestamp = midnight
+        today = self.get_current_time().to_datetime()
+        midnight = today.replace(hour=0, minute=0, second=0, microsecond=0)
+        ztp = TimeStamp.from_datetime(midnight)
         return ztp
 
     def run(self):
