@@ -110,32 +110,36 @@ class Bidder:
         self.logger.debug("Insertion points: %s", insertion_points)
 
         for insertion_point in insertion_points:
-            prev_version_next_stn_task = None
 
             if not self.insert_in(insertion_point):
                 continue
 
             self.logger.debug("Computing bid for task %s in insertion_point %s", task.task_id, insertion_point)
 
+            stn = copy.deepcopy(self.timetable.stn)
             prev_location = self.get_previous_location(insertion_point)
             travel_time = self.get_travel_time(task, prev_location)
 
-            prev_task_is_frozen = self.previous_task_is_frozen(insertion_point)
-            new_stn_task = self.timetable.to_stn_task(task,
-                                                      travel_time,
-                                                      insertion_point,
-                                                      prev_task_is_frozen)
+            stn_task = self.timetable.get_stn_task(task.task_id)
 
-            self.timetable.insert_task(new_stn_task, insertion_point)
+            if stn_task:
+                new_stn_task = self.timetable.update_stn_task(stn_task,
+                                                              travel_time,
+                                                              task.start_constraint.earliest_time,
+                                                              insertion_point)
+            else:
+                new_stn_task = self.timetable.to_stn_task(task, travel_time, insertion_point)
+                self.timetable.add_stn_task(new_stn_task)
+
+            stn.add_task(new_stn_task, insertion_point)
             allocation_info = AllocationInfo(insertion_point, new_stn_task)
 
             try:
                 next_stn_task, prev_version_next_stn_task = self.get_next_stn_task(insertion_point)
+                stn.update_task(new_stn_task)
                 allocation_info.update_next_task(next_stn_task, prev_version_next_stn_task)
             except TaskNotFound:
                 pass
-
-            stn = copy.deepcopy(self.timetable.stn)
 
             try:
                 bid = self.bidding_rule.compute_bid(stn, self.robot_id, self.round.round_id, task, allocation_info)
@@ -148,11 +152,6 @@ class Bidder:
 
             except NoSTPSolution:
                 self.logger.debug("The STN is inconsistent with task %s in insertion_point %s", task.task_id, insertion_point)
-
-            self.timetable.stn.remove_task(insertion_point)
-
-            if prev_version_next_stn_task is not None:
-                self.timetable.stn.update_task(prev_version_next_stn_task)
 
         end_time = time.time()
 
@@ -168,23 +167,19 @@ class Bidder:
     def get_next_stn_task(self, insertion_point):
         try:
             # Update previous location and start constraints of next task (if any)
-            next_task_id = self.timetable.get_task_id(insertion_point + 1)
-            next_task = self.tasks.get(next_task_id)
-            self.logger.debug("Updating previous location and start constraints of task %s, ", next_task.task_id)
-            prev_version_next_stn_task = self.timetable.get_stn_task(next_task.task_id)
+            task_id = self.timetable.get_task_id(insertion_point + 1)
+            task = self.tasks.get(task_id)
+            self.logger.debug("Updating previous location and start constraints of task %s, ", task.task_id)
 
+            stn_task = self.timetable.get_stn_task(task.task_id)
             prev_location = self.get_previous_location(insertion_point + 1)
-            travel_time = self.get_travel_time(next_task, prev_location)
+            travel_time = self.get_travel_time(task, prev_location)
 
-            prev_task_is_frozen = self.previous_task_is_frozen(insertion_point + 1)
-            next_stn_task = self.timetable.update_stn_task(next_task,
-                                                           copy.deepcopy(prev_version_next_stn_task),
-                                                           travel_time,
-                                                           insertion_point + 1,
-                                                           prev_task_is_frozen)
-            self.timetable.update_task(next_stn_task)
-
-            return next_stn_task, prev_version_next_stn_task
+            new_stn_task = self.timetable.update_stn_task(stn_task,
+                                                          travel_time,
+                                                          task.start_constraint.earliest_time,
+                                                          insertion_point + 1)
+            return new_stn_task, stn_task
 
         except TaskNotFound as e:
             raise e
@@ -349,7 +344,6 @@ class Bidder:
 
     def allocate_to_robot(self, task_id):
         allocation_info = self.round.bid_placed.get_allocation_info()
-        self.timetable.add_stn_task(allocation_info.new_task)
 
         task = self.tasks.get(task_id)
         travel_time_new_task = allocation_info.new_task.get_edge("travel_time")
@@ -359,7 +353,6 @@ class Bidder:
             next_task = self.tasks.get(allocation_info.new_task.task_id)
             travel_time_next_task = allocation_info.next_task.get_edge("travel_time")
             next_task.update_travel_time(mean=travel_time_next_task.mean, variance=travel_time_next_task.variance, save_in_db=False)
-            self.timetable.add_stn_task(allocation_info.next_task)
 
         self.timetable.stn = allocation_info.stn
         self.timetable.dispatchable_graph = allocation_info.dispatchable_graph
@@ -381,7 +374,6 @@ class Bidder:
 
             if cancellation.prev_version_next_task:
                 self.timetable.update_task(cancellation.prev_version_next_task)
-                self.timetable.add_stn_task(cancellation.prev_version_next_task)
 
             tasks = [task for task in self.timetable.get_tasks()]
             self.logger.debug("Tasks allocated to robot %s:%s", self.robot_id, tasks)

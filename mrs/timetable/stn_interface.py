@@ -1,10 +1,9 @@
 import uuid
 
+from mrs.utils.time import relative_to_ztp
 from stn.task import Edge
 from stn.task import Task as STNTask
 from stn.task import Timepoint
-
-from mrs.utils.time import relative_to_ztp, to_timestamp
 
 
 class STNInterface:
@@ -40,13 +39,15 @@ class STNInterface:
         self.add_stn_task(stn_task)
         self.stn.update_work_time(stn_task)
 
-    def to_stn_task(self, task, travel_time, insertion_point, previous_task_is_frozen):
+    def to_stn_task(self, task, travel_time, insertion_point):
         travel_edge = Edge(name="travel_time", mean=travel_time.mean, variance=travel_time.variance)
         duration_edge = Edge(name="work_time", mean=task.work_time.mean, variance=task.work_time.variance)
 
-        start_timepoint = self.get_start_timepoint(task, travel_edge, insertion_point)
-        departure_timepoint = self.get_departure_timepoint(task, start_timepoint, travel_edge, insertion_point,
-                                                           previous_task_is_frozen)
+        start_timepoint = self.get_start_timepoint(task)
+        departure_timepoint = self.get_departure_timepoint(task.start_constraint.earliest_time,
+                                                           start_timepoint,
+                                                           travel_edge,
+                                                           insertion_point)
         finish_timepoint = self.get_finish_timepoint(start_timepoint, duration_edge)
 
         edges = [travel_edge, duration_edge]
@@ -57,39 +58,26 @@ class STNInterface:
         stn_task = STNTask(task.task_id, timepoints, edges, start_action_id, finish_action_id)
         return stn_task
 
-    def update_stn_task(self, task, stn_task, travel_time, insertion_point, previous_task_is_frozen):
+    def update_stn_task(self, stn_task, travel_time, earliest_start_time, insertion_point):
         travel_edge = Edge(name="travel_time", mean=travel_time.mean, variance=travel_time.variance)
         start_timepoint = stn_task.get_timepoint("start")
-        departure_timepoint = self.get_departure_timepoint(task, start_timepoint, travel_edge, insertion_point,
-                                                           previous_task_is_frozen)
+        departure_timepoint = self.get_departure_timepoint(earliest_start_time, start_timepoint, travel_edge,
+                                                           insertion_point)
         stn_task.update_timepoint("departure", departure_timepoint.r_earliest_time, departure_timepoint.r_latest_time)
         stn_task.update_edge(travel_edge.name, travel_edge.mean, travel_edge.variance)
         return stn_task
 
-    def get_departure_timepoint(self, task, start_timepoint, travel_edge, insertion_point, previous_task_is_frozen):
+    def get_departure_timepoint(self, earliest_start_time, start_timepoint, travel_edge, insertion_point):
         departure_timepoint = self.stn.get_prev_timepoint("departure", start_timepoint, travel_edge)
 
         if insertion_point == 1:
-            departure_timepoint.r_earliest_time = relative_to_ztp(self.ztp, task.request.earliest_start_time)
+            departure_timepoint.r_earliest_time = relative_to_ztp(self.ztp, earliest_start_time)
 
         return departure_timepoint
 
-    def get_start_timepoint(self, task, travel_edge, insertion_point):
+    def get_start_timepoint(self, task):
         r_earliest_start_time = relative_to_ztp(self.ztp, task.start_constraint.earliest_time)
         r_latest_start_time = relative_to_ztp(self.ztp, task.start_constraint.latest_time)
-
-        if not task.hard_constraints and insertion_point > 1:
-            start_time_window = task.start_constraint.latest_time - task.start_constraint.earliest_time
-            r_earliest_finish_time_previous_task = self.get_r_time_previous_task(insertion_point, "finish")
-
-            r_earliest_start_time = r_earliest_finish_time_previous_task + travel_edge.mean
-            r_latest_start_time = r_earliest_start_time + start_time_window.total_seconds()
-
-            earliest_start_time = to_timestamp(self.ztp, r_earliest_start_time).to_datetime()
-            latest_start_time = to_timestamp(self.ztp, r_latest_start_time).to_datetime()
-
-            task.update_start_constraint(earliest_start_time, latest_start_time, save_in_db=False)
-
         start_timepoint = Timepoint(name="start", r_earliest_time=r_earliest_start_time,
                                     r_latest_time=r_latest_start_time)
         return start_timepoint
