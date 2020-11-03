@@ -40,6 +40,10 @@ class TimetableMonitorBase:
         elif self.timetable:
             return self.timetable
 
+    def get_archived_timetable(self, robot_id):
+        if self.timetable_manager:
+            return self.timetable_manager.get_archived_timetable(robot_id)
+
     def task_status_cb(self, msg):
         payload = msg['payload']
         timestamp = TimeStamp.from_str(msg["header"]["timestamp"]).to_datetime()
@@ -87,12 +91,15 @@ class TimetableMonitorBase:
         if store:
             timetable.store()
 
-    @staticmethod
-    def _update_edge(timetable, start_node, finish_node, nodes):
+    def _update_edge(self, timetable, start_node, finish_node, nodes):
         node_ids = [node_id for node_id, node in nodes if (node.node_type == start_node and node.is_executed) or
                     (node.node_type == finish_node and node.is_executed)]
         if len(node_ids) == 2:
-            timetable.execute_edge(node_ids[0], node_ids[1])
+            archived_timetable = self.get_archived_timetable(timetable.robot_id)
+            archived_timetable.dispatchable_graph = timetable.execute_edge(node_ids[0], node_ids[1], archived_timetable.dispatchable_graph)
+            self.timetable_manager.archived_timetables[timetable.robot_id] = archived_timetable
+            self.logger.debug("Dispatchable graph (archive) robot %s: %s", archived_timetable.robot_id, archived_timetable.dispatchable_graph)
+            archived_timetable.archive()
 
     def _update_progress(self, task, task_status, timestamp):
         task_progress = task_status.task_progress
@@ -154,7 +161,7 @@ class TimetableMonitorBase:
         if task.task_id == earliest_task_id and next_task:
             self._remove_first_task(task, next_task, status, timetable)
         else:
-            timetable.remove_task(task.task_id)
+            self._remove_task(task, timetable)
 
         if prev_task and next_task:
             self.update_pre_task_constraint(prev_task, next_task, timetable)
@@ -166,8 +173,7 @@ class TimetableMonitorBase:
         self.logger.debug("STN robot %s: %s", timetable.robot_id, timetable.stn)
         self.logger.debug("Dispatchable graph robot %s: %s", timetable.robot_id, timetable.dispatchable_graph)
 
-    @staticmethod
-    def _remove_first_task(task, next_task, status, timetable):
+    def _remove_first_task(self, task, next_task, status, timetable):
         if status == TaskStatusConst.COMPLETED:
             earliest_time = timetable.stn.get_time(task.task_id, 'finish', False)
             timetable.stn.assign_earliest_time(earliest_time, next_task.task_id, 'departure', force=True)
@@ -181,7 +187,14 @@ class TimetableMonitorBase:
         if start_next_task < earliest_time:
             timetable.dispatchable_graph.assign_earliest_time(earliest_time, next_task.task_id, 'departure', force=True)
 
-        timetable.remove_task(task.task_id)
+        self._remove_task(task, timetable)
+
+    def _remove_task(self, task, timetable):
+        archived_timetable = self.get_archived_timetable(timetable.robot_id)
+        archived_timetable = timetable.remove_task(task.task_id, archived_timetable)
+        self.timetable_manager.archived_timetables[timetable.robot_id] = archived_timetable
+        self.logger.debug("Dispatchable graph (archive) %s", archived_timetable.dispatchable_graph)
+        archived_timetable.archive()
 
     def update_pre_task_constraint(self, prev_task, task, timetable):
         self.logger.debug("Update pre_task constraint of task %s", task.task_id)
@@ -392,6 +405,15 @@ class TimetableMonitorProxy(TimetableMonitorBase):
             self.re_compute_dispatchable_graph(timetable, next_task)
         except (TaskNotFound, EmptyTimetable):
             return
+
+    def _remove_task(self, task, timetable):
+        timetable.remove_task(task.task_id)
+
+    def _update_edge(self, timetable, start_node, finish_node, nodes):
+        node_ids = [node_id for node_id, node in nodes if (node.node_type == start_node and node.is_executed) or
+                    (node.node_type == finish_node and node.is_executed)]
+        if len(node_ids) == 2:
+            timetable.execute_edge(node_ids[0], node_ids[1])
 
     def update_robot_pose(self, task):
         x, y, theta = self.planner.get_pose(task.request.finish_location)

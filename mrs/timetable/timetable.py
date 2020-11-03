@@ -12,6 +12,7 @@ from mrs.messages.d_graph_update import DGraphUpdate
 from mrs.simulation.simulator import SimulatorInterface
 from mrs.timetable.stn_interface import STNInterface
 from mrs.utils.time import to_timestamp
+from pymodm.context_managers import switch_collection
 from pymodm.errors import DoesNotExist
 from ropod.utils.timestamp import TimeStamp
 from stn.exceptions.stp import NoSTPSolution
@@ -88,11 +89,12 @@ class Timetable(STNInterface):
         self.dispatchable_graph.assign_timepoint(assigned_time, node_id, force=True)
         self.dispatchable_graph.execute_timepoint(node_id)
 
-    def execute_edge(self, start_node_id, finish_node_id):
+    def execute_edge(self, start_node_id, finish_node_id, archived_dispatchable_graph=None):
         self.stn.execute_edge(start_node_id, finish_node_id)
         self.stn.remove_old_timepoints()
         self.dispatchable_graph.execute_edge(start_node_id, finish_node_id)
-        self.dispatchable_graph.remove_old_timepoints()
+        archived_dispatchable_graph = self.dispatchable_graph.remove_old_timepoints(archived_dispatchable_graph)
+        return archived_dispatchable_graph
 
     def update_action_id(self, task_id, node_type, action_id):
         node_id, node = self.stn.get_node_by_type(task_id, node_type)
@@ -172,26 +174,34 @@ class Timetable(STNInterface):
             self.logger.warning("Task %s is delayed", task.task_id)
             task.delayed = True
 
-    def remove_task(self, task_id):
+    def remove_task(self, task_id, archived_timetable=None):
+        stn_task = self.stn_tasks.pop(str(task_id))
         self.remove_task_from_stn(task_id)
-        self.remove_task_from_dispatchable_graph(task_id)
-        if str(task_id) in self.stn_tasks:
-            self.stn_tasks.pop(str(task_id))
+        if archived_timetable:
+            archived_timetable.dispatchable_graph = self.remove_task_from_dispatchable_graph(task_id,
+                                                                                             archived_timetable.dispatchable_graph)
+            archived_timetable.add_stn_task(stn_task)
+        else:
+            self.remove_task_from_dispatchable_graph(task_id)
+        return archived_timetable
 
     def remove_task_from_stn(self, task_id):
         task_node_ids = self.stn.get_task_node_ids(task_id)
         if 0 < len(task_node_ids) < 3:
             self.stn.remove_node_ids(task_node_ids)
+            self.stn.displace_nodes(0)
         elif len(task_node_ids) == 3:
             node_id = self.stn.get_task_position(task_id)
             self.stn.remove_task(node_id)
         else:
             self.logger.warning("Task %s is not in timetable", task_id)
 
-    def remove_task_from_dispatchable_graph(self, task_id):
+    def remove_task_from_dispatchable_graph(self, task_id, archived_dispatchable_graph=None):
         task_node_ids = self.dispatchable_graph.get_task_node_ids(task_id)
         if 0 < len(task_node_ids) < 3:
-            self.dispatchable_graph.remove_node_ids(task_node_ids)
+            archived_dispatchable_graph = self.dispatchable_graph.remove_node_ids(task_node_ids, archived_dispatchable_graph)
+            self.dispatchable_graph.displace_nodes(0)
+            return archived_dispatchable_graph
         elif len(task_node_ids) == 3:
             node_id = self.dispatchable_graph.get_task_position(task_id)
             self.dispatchable_graph.remove_task(node_id)
@@ -295,6 +305,11 @@ class Timetable(STNInterface):
         timetable = self.to_model()
         timetable.save()
 
+    def archive(self):
+        timetable = self.to_model()
+        with switch_collection(TimetableMongo, TimetableMongo.Meta.archive_collection):
+           timetable.save()
+
     def fetch(self):
         try:
             self.logger.debug("Fetching timetable of robot %s", self.robot_id)
@@ -310,13 +325,19 @@ class Timetable(STNInterface):
             self.stn = self.stp_solver.get_stn()
             self.dispatchable_graph = self.stp_solver.get_stn()
 
+    def fetch_archived(self):
+        with switch_collection(TimetableMongo, TimetableMongo.Meta.archive_collection):
+            self.fetch()
 
-class TimetableManager(dict):
+
+class TimetableManager:
     """
     Manages the timetable of all the robots in the fleet
     """
     def __init__(self, stp_solver, **kwargs):
         super().__init__()
+        self.timetables = dict()
+        self.archived_timetables = dict()
         self.logger = logging.getLogger("mrs.timetable.manager")
         self.stp_solver = stp_solver
         self.simulator = kwargs.get('simulator')
@@ -326,37 +347,50 @@ class TimetableManager(dict):
     @property
     def ztp(self):
         if self:
-            any_timetable = next(iter(self.values()))
+            any_timetable = next(iter(self.timetables.values()))
             return any_timetable.ztp
         else:
             self.logger.error("There are no robots registered.")
 
     @ztp.setter
     def ztp(self, time_):
-        for robot_id, timetable in self.items():
+        for robot_id, timetable in self.timetables.items():
             timetable.update_zero_timepoint(time_)
 
     def get_timetable(self, robot_id):
-        return self.get(robot_id)
+        return self.timetables.get(robot_id)
+
+    def get_archived_timetable(self, robot_id):
+        return self.archived_timetables.get(robot_id)
+
+    def fetch_timetable(self, robot_id):
+        timetable = Timetable(robot_id, self.stp_solver, simulator=self.simulator)
+        timetable.fetch()
+        self.timetables[robot_id] = timetable
+        self.logger.debug("STN robot %s: %s", robot_id, timetable.stn)
+        self.logger.debug("Dispatchable graph robot %s: %s", robot_id, timetable.dispatchable_graph)
+
+    def fetch_archived_timetable(self, robot_id):
+        timetable = Timetable(robot_id, self.stp_solver, simulator=self.simulator)
+        timetable.fetch_archived()
+        self.archived_timetables[robot_id] = timetable
+        self.logger.debug("STN (archived) robot %s: %s", robot_id, timetable.stn)
+        self.logger.debug("Dispatchable graph (archived) robot %s: %s", robot_id, timetable.dispatchable_graph)
 
     def register_robot(self, robot):
         self.logger.debug("Loading timetable of robot %s", robot.robot_id)
-        timetable = Timetable(robot.robot_id, self.stp_solver, simulator=self.simulator)
-        timetable.fetch()
-        self[robot.robot_id] = timetable
-        timetable.store()
-        self.logger.debug("STN robot %s: %s", robot.robot_id, timetable.stn)
-        self.logger.debug("Dispatchable graph robot %s: %s", robot.robot_id, timetable.dispatchable_graph)
+        self.fetch_timetable(robot.robot_id)
+        self.fetch_archived_timetable(robot.robot_id)
 
     def unregister_robot(self, robot):
-        self.pop(robot.robot_id)
+        self.timetables.pop(robot.robot_id)
 
     def fetch_timetables(self):
-        for robot_id, timetable in self.items():
+        for robot_id, timetable in self.timetables.items():
             timetable.fetch()
 
     def update_timetable(self, robot_id, allocation_info, task):
-        timetable = self.get(robot_id)
+        timetable = self.timetables.get(robot_id)
         stn = copy.deepcopy(timetable.stn)
 
         stn.add_task(allocation_info.new_task, allocation_info.insertion_point)
@@ -379,7 +413,7 @@ class TimetableManager(dict):
             timetable.add_stn_task(allocation_info.next_task)
 
         timetable.stn = stn
-        self.update({robot_id: timetable})
+        self.timetables.update({robot_id: timetable})
         timetable.store()
 
         self.logger.debug("STN robot %s: %s", robot_id, timetable.stn)
