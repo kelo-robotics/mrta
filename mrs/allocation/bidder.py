@@ -117,7 +117,7 @@ class Bidder:
             self.logger.debug("Computing bid for task %s in insertion_point %s", task.task_id, insertion_point)
 
             stn = copy.deepcopy(self.timetable.stn)
-            prev_location = self.get_previous_location(insertion_point)
+            prev_location = self.get_previous_location(stn, insertion_point)
             travel_time = self.get_travel_time(task, prev_location)
 
             stn_task = self.timetable.get_stn_task(task.task_id)
@@ -134,12 +134,13 @@ class Bidder:
             stn.add_task(new_stn_task, insertion_point)
             allocation_info = AllocationInfo(insertion_point, new_stn_task)
 
-            try:
-                next_stn_task, prev_version_next_stn_task = self.get_next_stn_task(insertion_point)
-                stn.update_task(new_stn_task)
+            next_task_id = stn.get_task_id(insertion_point + 1)
+            if next_task_id:
+                next_task = self.tasks.get(next_task_id)
+
+                next_stn_task, prev_version_next_stn_task = self.get_next_stn_task(stn, next_task, insertion_point)
+                stn.update_task(next_stn_task)
                 allocation_info.update_next_task(next_stn_task, prev_version_next_stn_task)
-            except TaskNotFound:
-                pass
 
             try:
                 bid = self.bidding_rule.compute_bid(stn, self.robot_id, self.round.round_id, task, allocation_info)
@@ -164,25 +165,18 @@ class Bidder:
 
         return best_bid
 
-    def get_next_stn_task(self, insertion_point):
-        try:
-            # Update previous location and start constraints of next task (if any)
-            task_id = self.timetable.get_task_id(insertion_point + 1)
-            task = self.tasks.get(task_id)
-            self.logger.debug("Updating previous location and start constraints of task %s, ", task.task_id)
+    def get_next_stn_task(self, stn, next_task, insertion_point):
+        self.logger.debug("Updating previous location, start and travel constraints of task %s ", next_task.task_id)
 
-            stn_task = self.timetable.get_stn_task(task.task_id)
-            prev_location = self.get_previous_location(insertion_point + 1)
-            travel_time = self.get_travel_time(task, prev_location)
+        prev_version_next_stn_task = self.timetable.get_stn_task(next_task.task_id)
+        prev_location = self.get_previous_location(stn, insertion_point + 1)
+        travel_time = self.get_travel_time(next_task, prev_location)
 
-            new_stn_task = self.timetable.update_stn_task(stn_task,
-                                                          travel_time,
-                                                          task.start_constraint.earliest_time,
-                                                          insertion_point + 1)
-            return new_stn_task, stn_task
-
-        except TaskNotFound as e:
-            raise e
+        next_stn_task = self.timetable.update_stn_task(prev_version_next_stn_task,
+                                                       travel_time,
+                                                       next_task.start_constraint.earliest_time,
+                                                       insertion_point + 1)
+        return next_stn_task, prev_version_next_stn_task
 
     def place_bids(self):
         self.task_announcement = None
@@ -257,7 +251,7 @@ class Bidder:
         except DoesNotExist:
             return False
 
-    def get_previous_location(self, insertion_point):
+    def get_previous_location(self, stn, insertion_point):
         if insertion_point == 1:
             try:
                 pose = self.robot.position
@@ -265,7 +259,7 @@ class Bidder:
             except DoesNotExist:
                 self.logger.error("No information about robot's location")
         else:
-            previous_task_id = self.timetable.get_task_id(insertion_point - 1)
+            previous_task_id = stn.get_task_id(insertion_point - 1)
             previous_task = self.tasks.get(previous_task_id)
             previous_location = previous_task.request.finish_location
 
