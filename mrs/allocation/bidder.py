@@ -237,8 +237,7 @@ class Bidder:
         the earliest and latest start times of the given task
         """
         r_earliest_time = relative_to_ztp(self.timetable.ztp, task.start_constraint.earliest_time)
-        r_latest_time = relative_to_ztp(self.timetable.ztp, task.start_constraint.latest_time)
-        insertion_points = self.timetable.get_insertion_points(r_earliest_time, r_latest_time)
+        insertion_points = self.timetable.get_insertion_points(r_earliest_time)
         # Add insertion position after last task
         n_tasks = len(self.timetable.get_tasks())
         insertion_points.append(n_tasks + 1)

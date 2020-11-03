@@ -165,8 +165,8 @@ class Timetable(STNInterface):
         finish_time = self.ztp + timedelta(seconds=r_finish_time)
         return finish_time
 
-    def get_insertion_points(self, r_earliest_time, r_latest_time):
-        return self.stn.get_insertion_points(r_earliest_time, r_latest_time)
+    def get_insertion_points(self, r_earliest_time):
+        return self.stn.get_insertion_points(r_earliest_time)
 
     def check_is_task_delayed(self, task, assigned_time, node_id):
         latest_time = self.dispatchable_graph.get_node_latest_time(node_id)
