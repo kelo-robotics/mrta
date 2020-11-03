@@ -3,6 +3,7 @@ import logging
 from datetime import timedelta
 
 from fmlib.models.tasks import Task
+from fmlib.models.tasks import TaskStatus
 from fmlib.models.tasks import TimepointConstraint
 from fmlib.models.timetable import Timetable as TimetableMongo
 from mrs.exceptions.allocation import InvalidAllocation
@@ -14,6 +15,7 @@ from mrs.timetable.stn_interface import STNInterface
 from mrs.utils.time import to_timestamp
 from pymodm.context_managers import switch_collection
 from pymodm.errors import DoesNotExist
+from ropod.structs.status import TaskStatus as TaskStatusConst
 from ropod.utils.timestamp import TimeStamp
 from stn.exceptions.stp import NoSTPSolution
 from stn.methods.fpc import get_minimal_network
@@ -225,44 +227,66 @@ class Timetable(STNInterface):
         sub_dispatchable_graph = self.dispatchable_graph.get_subgraph(n_tasks)
         return DGraphUpdate(robot_id, self.ztp, sub_stn, sub_dispatchable_graph)
 
-    def get_tasks_for_timetable_update(self):
+    def get_tasks_for_timetable_update(self, other, task_ids, status, earliest_time, latest_time):
         tasks = list()
-        task_ids = list()
         for i in sorted(self.dispatchable_graph.nodes()):
-            node_data = self.dispatchable_graph.nodes[i]['data']
-            if node_data.task_id not in task_ids \
-                    and node_data.node_type != 'zero_timepoint':
+            if 'data' in self.dispatchable_graph.nodes[i]:
+                node_data = self.dispatchable_graph.nodes[i]['data']
+                if node_data.task_id not in task_ids \
+                        and node_data.node_type != 'zero_timepoint':
+                    try:
+                        task = Task.get_task(node_data.task_id)
+                    except DoesNotExist:
+                        task = Task.get_archived_task(node_data.task_id)
 
-                task = Task.get_task(node_data.task_id)
-                task_dict = {"task_id": str(task.task_id),
-                             "type": task.type,
-                             "status": task.status.status,
-                             }
+                    # Do not include tasks whose status are not in the given list of status
+                    if task.status.status not in status:
+                        continue
 
-                departure_times = self.dispatchable_graph.get_times(task.task_id, "departure")
-                start_times = self.dispatchable_graph.get_times(task.task_id, "start")
-                finish_times = self.dispatchable_graph.get_times(task.task_id, "finish")
+                    task_dict = {"task_id": str(task.task_id),
+                                 "type": task.type,
+                                 "status": task.status.status,
+                                 }
 
-                if departure_times:
+                    start_times = self.dispatchable_graph.get_times(task.task_id, "start")
+
+                    # Only include tasks whose start constraints are within the given [earliest_time, latest_time]
+                    if not start_times:
+                        start_times = other.dispatchable_graph.get_times(task.task_id, "start")
+                    start = self.get_timepoint_dict(start_times)
+                    if not self.time_is_within_tw(start, earliest_time, latest_time):
+                        continue
+                    task_dict.update(start=start)
+
+                    departure_times = self.dispatchable_graph.get_times(task.task_id, "departure")
+                    finish_times = self.dispatchable_graph.get_times(task.task_id, "finish")
+
+                    if not departure_times:
+                        departure_times = other.dispatchable_graph.get_times(task.task_id, "departure")
                     departure = self.get_timepoint_dict(departure_times)
                     task_dict.update(departure=departure)
 
-                if start_times:
-                    start = self.get_timepoint_dict(start_times)
-                    task_dict.update(start=start)
-
-                if finish_times:
+                    if not finish_times:
+                        finish_times = other.dispatchable_graph.get_times(task.task_id, "finish")
                     finish = self.get_timepoint_dict(finish_times)
                     task_dict.update(finish=finish)
 
-                tasks.append(task_dict)
-                task_ids.append(task.task_id)
-        return tasks
+                    tasks.append(task_dict)
+                    task_ids.append(task.task_id)
+
+        return tasks, task_ids
 
     def get_timepoint_dict(self, times_):
         return {"earliest": TimeStamp.to_str(to_timestamp(self.ztp, times_[0])),
                 "latest": TimeStamp.to_str(to_timestamp(self.ztp, times_[1]))
                 }
+
+    @staticmethod
+    def time_is_within_tw(timepoint_dict, earliest_time, latest_time):
+        if TimeStamp.from_str(timepoint_dict["earliest"]) >= earliest_time and\
+                TimeStamp.from_str(timepoint_dict["latest"]) <= latest_time:
+            return True
+        return False
 
     def to_dict(self):
         timetable_dict = dict()
@@ -324,6 +348,7 @@ class Timetable(STNInterface):
             # Resetting values
             self.stn = self.stp_solver.get_stn()
             self.dispatchable_graph = self.stp_solver.get_stn()
+            self.store()
 
     def fetch_archived(self):
         with switch_collection(TimetableMongo, TimetableMongo.Meta.archive_collection):
@@ -388,6 +413,38 @@ class TimetableManager:
     def fetch_timetables(self):
         for robot_id, timetable in self.timetables.items():
             timetable.fetch()
+
+    def get_timetable_update_reply(self, robot_ids, status, earliest_time, latest_time):
+        timetables = list()
+        for robot_id in robot_ids:
+            tasks = list()
+            task_ids = list()
+            timetable = self.get_timetable(robot_id)
+            archived_timetable = self.get_archived_timetable(robot_id)
+
+            if any(s in TaskStatus.archived_status for s in status):
+                archived_tasks, task_ids = archived_timetable.get_tasks_for_timetable_update(timetable,
+                                                                                             task_ids,
+                                                                                             status,
+                                                                                             earliest_time,
+                                                                                             latest_time)
+                tasks.extend(archived_tasks)
+
+            if any(s in [TaskStatusConst.ALLOCATED,
+                         TaskStatusConst.SCHEDULED,
+                         TaskStatusConst.DISPATCHED,
+                         TaskStatusConst.ONGOING]
+                   for s in status):
+                not_archived_tasks, task_ids = timetable.get_tasks_for_timetable_update(archived_timetable,
+                                                                                        task_ids,
+                                                                                        status,
+                                                                                        earliest_time,
+                                                                                        latest_time)
+                tasks.extend(not_archived_tasks)
+
+            timetables.append({"robot_id": robot_id, "tasks": tasks})
+
+        return timetables
 
     def update_timetable(self, robot_id, allocation_info, task):
         timetable = self.timetables.get(robot_id)
