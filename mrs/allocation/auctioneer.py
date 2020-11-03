@@ -198,7 +198,7 @@ class Auctioneer(SimulatorInterface):
             self.add_task_to_allocate(tasks)
             tasks_to_allocate[tasks.task_id] = tasks
 
-        self.tasks_to_allocate = tasks_to_allocate
+        self.tasks_to_allocate.update(tasks_to_allocate)
 
     def add_task_to_allocate(self, task):
         task.eligible_robots = self.get_eligible_robots(task)
