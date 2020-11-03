@@ -15,7 +15,6 @@ from mrs.timetable.stn_interface import STNInterface
 from mrs.utils.time import to_timestamp
 from pymodm.context_managers import switch_collection
 from pymodm.errors import DoesNotExist
-from ropod.structs.status import TaskStatus as TaskStatusConst
 from ropod.utils.timestamp import TimeStamp
 from stn.exceptions.stp import NoSTPSolution
 from stn.methods.fpc import get_minimal_network
@@ -227,8 +226,13 @@ class Timetable(STNInterface):
         sub_dispatchable_graph = self.dispatchable_graph.get_subgraph(n_tasks)
         return DGraphUpdate(robot_id, self.ztp, sub_stn, sub_dispatchable_graph)
 
-    def get_tasks_for_timetable_update(self, other, task_ids, status, earliest_time, latest_time):
+    def get_tasks_for_timetable_update(self, other, **kwargs):
         tasks = list()
+        task_ids = kwargs.get("task_ids", list())
+        status = kwargs.get("status", TaskStatus.in_timetable)
+        earliest_time = kwargs.get("earliest_time")
+        latest_time = kwargs.get("latest_time")
+
         for i in sorted(self.dispatchable_graph.nodes()):
             if 'data' in self.dispatchable_graph.nodes[i]:
                 node_data = self.dispatchable_graph.nodes[i]['data']
@@ -254,7 +258,7 @@ class Timetable(STNInterface):
                     if not start_times:
                         start_times = other.dispatchable_graph.get_times(task.task_id, "start")
                     start = self.get_timepoint_dict(start_times)
-                    if not self.time_is_within_tw(start, earliest_time, latest_time):
+                    if earliest_time and latest_time and not self.time_is_within_tw(start, earliest_time, latest_time):
                         continue
                     task_dict.update(start=start)
 
@@ -348,7 +352,7 @@ class Timetable(STNInterface):
             # Resetting values
             self.stn = self.stp_solver.get_stn()
             self.dispatchable_graph = self.stp_solver.get_stn()
-            self.store()
+            # self.store()
 
     def fetch_archived(self):
         with switch_collection(TimetableMongo, TimetableMongo.Meta.archive_collection):
@@ -424,22 +428,18 @@ class TimetableManager:
 
             if any(s in TaskStatus.archived_status for s in status):
                 archived_tasks, task_ids = archived_timetable.get_tasks_for_timetable_update(timetable,
-                                                                                             task_ids,
-                                                                                             status,
-                                                                                             earliest_time,
-                                                                                             latest_time)
+                                                                                             task_ids=task_ids,
+                                                                                             status=status,
+                                                                                             earliest_time=earliest_time,
+                                                                                             latest_time=latest_time)
                 tasks.extend(archived_tasks)
 
-            if any(s in [TaskStatusConst.ALLOCATED,
-                         TaskStatusConst.SCHEDULED,
-                         TaskStatusConst.DISPATCHED,
-                         TaskStatusConst.ONGOING]
-                   for s in status):
+            if any(s in TaskStatus.in_timetable for s in status):
                 not_archived_tasks, task_ids = timetable.get_tasks_for_timetable_update(archived_timetable,
-                                                                                        task_ids,
-                                                                                        status,
-                                                                                        earliest_time,
-                                                                                        latest_time)
+                                                                                        task_ids=task_ids,
+                                                                                        status=status,
+                                                                                        earliest_time=earliest_time,
+                                                                                        latest_time=latest_time)
                 tasks.extend(not_archived_tasks)
 
             timetables.append({"robot_id": robot_id, "tasks": tasks})
