@@ -273,7 +273,8 @@ class TimetableMonitor(TimetableMonitorBase):
         super()._update_timepoint(task, timetable, r_assigned_time, node_id, task_progress, store)
 
         robot_performance = RobotPerformance.get_robot(timetable.robot_id, api=self.api)
-        robot_performance.update_timetables(timetable)
+        archived_timetable = self.timetable_manager.get_archived_timetable(timetable.robot_id)
+        robot_performance.update_timetables(timetable, archived_timetable)
         self.auctioneer.changed_timetable.append(timetable.robot_id)
 
         if self.d_graph_watchdog:
