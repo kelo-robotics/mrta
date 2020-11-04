@@ -12,12 +12,13 @@ class AlternativeTimeSlot(Exception):
 
 class NoAllocation(Exception):
 
-    def __init__(self, round_id):
-        """ Raised when no allocation was possible in round_id
+    def __init__(self, round_id, tasks):
+        """ Raised when no allocation was possible in round_id for the tasks in tasks
 
         """
-        Exception.__init__(self, round_id)
+        Exception.__init__(self, round_id, tasks)
         self.round_id = round_id
+        self.tasks = tasks
 
 
 class InvalidAllocation(Exception):

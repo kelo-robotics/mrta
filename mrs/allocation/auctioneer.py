@@ -64,10 +64,12 @@ class Auctioneer(SimulatorInterface):
             if robot.is_capable(task) and robot.robot_id not in task.capable_robots:
                 self.logger.debug("Robot %s is capable of performing task %s", robot.robot_id, task_id)
                 task.capable_robots.append(robot.robot_id)
-            if robot.is_eligible(task) and robot.robot_id not in task.eligible_robots:
+            if robot.is_eligible(task):
                 self.logger.debug("Robot %s is eligible for performing task %s", robot.robot_id, task_id)
-                task.eligible_robots.append(robot.robot_id)
                 self.eligible_robots[robot.robot_id].add_task(task)
+                if robot.robot_id not in task.eligible_robots:
+                    task.eligible_robots.append(robot.robot_id)
+
             task.save()
 
         self.robots[robot.robot_id] = robot
@@ -107,7 +109,7 @@ class Auctioneer(SimulatorInterface):
                 return
 
             self.no_robots_registered_warning = False
-            tasks = self.get_tasks_to_announce(list(self.tasks_to_allocate.values()))
+            tasks = self.get_tasks_to_announce(self.tasks_to_allocate)
             if tasks:
                 self.announce_tasks(tasks)
 
@@ -118,6 +120,8 @@ class Auctioneer(SimulatorInterface):
 
             except NoAllocation as e:
                 self.logger.warning("No allocation made in round %s ", e.round_id)
+                for task in e.tasks:
+                    self.tasks_to_allocate[task.task_id] = task
                 self.finish_round()
 
             except AlternativeTimeSlot as e:
@@ -130,8 +134,8 @@ class Auctioneer(SimulatorInterface):
         bid = exception.bid
         alternative_allocation = (bid.task_id, [bid.robot_id], bid.alternative_start_time)
 
-        self.logger.debug("Alternative timeslot for task %s: robot %s, alternative start time: %s ", bid.task_id,
-                          bid.robot_id, bid.alternative_start_time)
+        self.logger.warning("Task %s will be allocated to robot %s in alternative start time: %s ", bid.task_id,
+                            bid.robot_id, bid.alternative_start_time)
 
         self.waiting_for_user_confirmation.append(alternative_allocation)
 
@@ -174,7 +178,7 @@ class Auctioneer(SimulatorInterface):
 
         self.allocations.append(allocation)
         task_performance = TaskPerformance.get_task(self.winning_bid.task_id)
-        task_performance.update_allocation(self.round.id, self.round.time_to_allocate, self.round.tasks)
+        task_performance.update_allocation(self.round.id, self.round.time_to_allocate, list(self.round.tasks.keys()))
         robot_performance = RobotPerformance.get_robot(self.winning_bid.robot_id, api=self.api)
         archived_timetable = self.timetable_manager.get_archived_timetable(timetable.robot_id)
         robot_performance.update_timetables(timetable, archived_timetable)
@@ -212,9 +216,9 @@ class Auctioneer(SimulatorInterface):
         self.round.finish()
 
     def get_tasks_to_announce(self, tasks):
-        tasks_to_announce = list()
+        tasks_to_announce = dict()
 
-        for task in tasks:
+        for task in tasks.values():
             if not self.is_task_valid(task):
                 continue
 
@@ -228,7 +232,7 @@ class Auctioneer(SimulatorInterface):
             if task.task_id in self.no_robots_eligible_warning:
                 self.no_robots_eligible_warning.remove(task.task_id)
 
-            tasks_to_announce.append(task)
+            tasks_to_announce[task.task_id] = task
 
         return tasks_to_announce
 
@@ -240,14 +244,14 @@ class Auctioneer(SimulatorInterface):
         self.changed_timetable.clear()
 
         self.round = Round(self.eligible_robots,
-                           [task.task_id for task in tasks],
+                           tasks,
                            closure_time=closure_time,
                            alternative_timeslots=self.alternative_timeslots,
                            simulator=self.simulator)
 
-        self.logger.debug("Auctioneer announces tasks %s", [task.task_id for task in tasks])
+        self.logger.debug("Auctioneer announces tasks %s", tasks.keys())
 
-        task_announcement = TaskAnnouncement(tasks, self.round.id, self.timetable_manager.ztp)
+        task_announcement = TaskAnnouncement(list(tasks.values()), self.round.id, self.timetable_manager.ztp)
         msg = self.api.create_message(task_announcement)
         self.round.start()
         self.api.publish(msg, groups=['TASK-ALLOCATION'])
@@ -257,11 +261,9 @@ class Auctioneer(SimulatorInterface):
 
         if not self.is_valid_time(task.start_constraint.latest_time):
 
-            if self.alternative_timeslots:
-                if task.hard_constraints:
-                    self.logger.warning("Setting soft constraints for task %s", task.task_id)
-                    task.hard_constraints = False
-                self.update_soft_constraints(task)
+            if self.alternative_timeslots and task.hard_constraints:
+                self.logger.warning("Setting soft constraints for task %s", task.task_id)
+                task.hard_constraints = False
 
             elif not self.alternative_timeslots:
                 self.logger.warning("Task %s cannot not be allocated at its given temporal constraints",
@@ -303,7 +305,7 @@ class Auctioneer(SimulatorInterface):
         start_time_window = task.start_constraint.latest_time - task.start_constraint.earliest_time
         earliest_start_time = self.get_current_time() + timedelta(minutes=1)
         latest_start_time = earliest_start_time + start_time_window
-        task.update_start_constraint(earliest_start_time, latest_start_time)
+        task.update_start_constraint(earliest_start_time.to_datetime(), latest_start_time.to_datetime())
 
     def bid_cb(self, msg):
         payload = msg['payload']
@@ -318,9 +320,13 @@ class Auctioneer(SimulatorInterface):
         ack = TaskContractAcknowledgment.from_payload(payload)
 
         if ack.accept and ack.robot_id not in self.changed_timetable:
-            self.logger.debug("Concluding allocation of task %s", ack.task_id)
-            self.winning_bid.set_allocation_info(ack.allocation_info)
-            self.process_allocation()
+            timetable = self.timetable_manager.get_timetable(self.winning_bid.robot_id)
+            if self.round.is_task_frozen(timetable, ack.allocation_info):
+                self.undo_allocation(ack.allocation_info)
+            else:
+                self.logger.debug("Concluding allocation of task %s", ack.task_id)
+                self.winning_bid.set_allocation_info(ack.allocation_info)
+                self.process_allocation()
 
         elif ack.accept and ack.robot_id in self.changed_timetable:
             self.undo_allocation(ack.allocation_info)

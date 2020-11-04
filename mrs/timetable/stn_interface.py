@@ -1,6 +1,8 @@
 import uuid
 
 from mrs.utils.time import relative_to_ztp
+from mrs.utils.time import to_timestamp
+from ropod.utils.timestamp import TimeStamp
 from stn.task import Edge
 from stn.task import Task as STNTask
 from stn.task import Timepoint
@@ -43,7 +45,7 @@ class STNInterface:
         travel_edge = Edge(name="travel_time", mean=travel_time.mean, variance=travel_time.variance)
         duration_edge = Edge(name="work_time", mean=task.work_time.mean, variance=task.work_time.variance)
 
-        start_timepoint = self.get_start_timepoint(task)
+        start_timepoint = self.get_start_timepoint(task, travel_edge, insertion_point)
         departure_timepoint = self.get_departure_timepoint(task.start_constraint.earliest_time,
                                                            start_timepoint,
                                                            travel_edge,
@@ -58,11 +60,20 @@ class STNInterface:
         stn_task = STNTask(task.task_id, timepoints, edges, start_action_id, finish_action_id)
         return stn_task
 
-    def update_stn_task(self, stn_task, travel_time, earliest_start_time, insertion_point):
+    def update_stn_task(self, stn_task, travel_time, task, insertion_point):
         travel_edge = Edge(name="travel_time", mean=travel_time.mean, variance=travel_time.variance)
-        start_timepoint = stn_task.get_timepoint("start")
-        departure_timepoint = self.get_departure_timepoint(earliest_start_time, start_timepoint, travel_edge,
+
+        if task.hard_constraints:
+            start_timepoint = stn_task.get_timepoint("start")
+        else:
+            start_timepoint = self.get_start_timepoint(task, travel_edge, insertion_point)
+            stn_task.update_timepoint("start", start_timepoint.r_earliest_time, start_timepoint.r_latest_time)
+
+        departure_timepoint = self.get_departure_timepoint(task.start_constraint.earliest_time,
+                                                           start_timepoint,
+                                                           travel_edge,
                                                            insertion_point)
+
         stn_task.update_timepoint("departure", departure_timepoint.r_earliest_time, departure_timepoint.r_latest_time)
         stn_task.update_edge(travel_edge.name, travel_edge.mean, travel_edge.variance)
         return stn_task
@@ -75,9 +86,27 @@ class STNInterface:
 
         return departure_timepoint
 
-    def get_start_timepoint(self, task):
+    def get_start_timepoint(self, task, travel_edge, insertion_point):
         r_earliest_start_time = relative_to_ztp(self.ztp, task.start_constraint.earliest_time)
         r_latest_start_time = relative_to_ztp(self.ztp, task.start_constraint.latest_time)
+
+        if not task.hard_constraints:
+            start_time_window = task.start_constraint.latest_time - task.start_constraint.earliest_time
+
+            if insertion_point == 1:
+                earliest_start_time = TimeStamp().to_datetime()
+                r_earliest_start_time = relative_to_ztp(self.ztp, earliest_start_time)
+            else:
+                previous_task_id = self.stn.get_task_id(insertion_point-1)
+                r_earliest_finish_time_previous_task = self.dispatchable_graph.get_time(previous_task_id, "finish")
+                r_earliest_start_time = r_earliest_finish_time_previous_task + travel_edge.mean
+                earliest_start_time = to_timestamp(self.ztp, r_earliest_start_time).to_datetime()
+
+            latest_start_time = earliest_start_time + start_time_window
+            r_latest_start_time = relative_to_ztp(self.ztp, latest_start_time)
+
+            task.update_start_constraint(earliest_start_time, latest_start_time)
+
         start_timepoint = Timepoint(name="start", r_earliest_time=r_earliest_start_time,
                                     r_latest_time=r_latest_start_time)
         return start_timepoint

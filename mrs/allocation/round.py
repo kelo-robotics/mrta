@@ -3,19 +3,23 @@ import logging
 import time
 from datetime import datetime
 
+from fmlib.models.tasks import Task
 from mrs.exceptions.allocation import AlternativeTimeSlot
 from mrs.exceptions.allocation import NoAllocation
+from mrs.exceptions.allocation import TaskNotFound
 from mrs.messages.bid import NoBid
 from mrs.simulation.simulator import SimulatorInterface
 from ropod.utils.uuid import generate_uuid
 
 
 class RoundBidder:
-    def __init__(self, round_id):
+    def __init__(self, round_id, stn, dispatchable_graph):
         self.round_id = round_id
         self.bids = list()
         self.no_bids = list()
         self.bid_placed = None
+        self.stn = stn
+        self.dispatchable_graph = dispatchable_graph
 
 
 class Round(SimulatorInterface):
@@ -141,13 +145,24 @@ class Round(SimulatorInterface):
 
             return winning_bid
 
-        except NoAllocation as e:
-            raise NoAllocation(e.round_id)
+        except NoAllocation:
+            raise
 
     def finish(self):
         self.opened = False
         self.finished = True
         self.logger.debug("Round %s finished", self.id)
+
+    def get_tasks_without_bids(self):
+        tasks_without_bids = list()
+        for task_id, n_no_bids in self.received_no_bids.items():
+            if task_id not in self.received_bids:
+                task = self.tasks.get(task_id)
+                if task.constraints.hard and self.alternative_timeslots:
+                    self.logger.warning("Setting soft constraints for task %s", task_id)
+                    task.hard_constraints = False
+                    tasks_without_bids.append(task)
+        return tasks_without_bids
 
     def elect_winner(self):
         """ Elects the winner of the round
@@ -165,10 +180,23 @@ class Round(SimulatorInterface):
                     or (bid == lowest_bid and bid.task_id < lowest_bid.task_id):
                 lowest_bid = copy.deepcopy(bid)
 
+        tasks_without_bids = self.get_tasks_without_bids()
+
         if lowest_bid is None:
-            raise NoAllocation(self.id)
+            raise NoAllocation(self.id, tasks_without_bids)
 
         return lowest_bid
+
+    def is_task_frozen(self, timetable, allocation_info):
+        try:
+            task_id = timetable.get_task_id(allocation_info.insertion_point)
+            task_to_replace = Task.get_task(task_id)
+            if task_to_replace.is_frozen():
+                self.logger.warning("Task %s in position %s is frozen", task_id, allocation_info.insertion_point)
+                return True
+            return False
+        except TaskNotFound:
+            return False
 
     def get_time_to_allocate(self):
         return self.time_to_allocate
