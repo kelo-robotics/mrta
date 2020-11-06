@@ -353,6 +353,7 @@ class TimetableMonitor(TimetableMonitorBase):
         self.remove_task(task, TaskStatusConst.CANCELED)
 
     def send_remove_task(self, task_id, status, robot_id):
+        self.logger.debug("Sending remove-task-from-schedule for task %s to robot %s", task_id, robot_id)
         remove_task = RemoveTaskFromSchedule(task_id, status)
         msg = self.api.create_message(remove_task)
         self.api.publish(msg, peer=str(robot_id) + '_proxy')
@@ -395,6 +396,7 @@ class TimetableMonitorProxy(TimetableMonitorBase):
         payload = msg['payload']
         remove_task = RemoveTaskFromSchedule.from_payload(payload)
         task = self.tasks.get(remove_task.task_id)
+        self.logger.debug("Received remote-task-from-schedule for task %s", task.task_id)
         self.remove_task(task, remove_task.status)
 
     def remove_task(self, task, status):

@@ -347,6 +347,8 @@ class Timetable(STNInterface):
             self.dispatchable_graph = self.stn.from_dict(timetable_mongo.dispatchable_graph)
             self.ztp = TimeStamp.from_datetime(timetable_mongo.ztp)
             self.stn_tasks = {task_id: STNTask.from_dict(task) for (task_id, task) in timetable_mongo.stn_tasks.items()}
+            self.logger.debug("STN robot %s: %s", self.robot_id, self.stn)
+            self.logger.debug("Dispatchable graph robot %s: %s", self.robot_id, self.dispatchable_graph)
 
         except DoesNotExist:
             self.logger.debug("The timetable of robot %s is empty", self.robot_id)
@@ -397,15 +399,11 @@ class TimetableManager:
         timetable = Timetable(robot_id, self.stp_solver, simulator=self.simulator)
         timetable.fetch()
         self.timetables[robot_id] = timetable
-        self.logger.debug("STN robot %s: %s", robot_id, timetable.stn)
-        self.logger.debug("Dispatchable graph robot %s: %s", robot_id, timetable.dispatchable_graph)
 
     def fetch_archived_timetable(self, robot_id):
         timetable = Timetable(robot_id, self.stp_solver, simulator=self.simulator)
         timetable.fetch_archived()
         self.archived_timetables[robot_id] = timetable
-        self.logger.debug("STN (archived) robot %s: %s", robot_id, timetable.stn)
-        self.logger.debug("Dispatchable graph (archived) robot %s: %s", robot_id, timetable.dispatchable_graph)
 
     def restore_timetable_data(self, robot_id):
         self.logger.debug("Reading timetable of robot %s from the database", robot_id)
