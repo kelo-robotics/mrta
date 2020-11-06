@@ -179,8 +179,9 @@ class Timetable(STNInterface):
         stn_task = self.stn_tasks.pop(str(task_id))
         self.remove_task_from_stn(task_id)
         if archived_timetable:
-            archived_timetable.dispatchable_graph = self.remove_task_from_dispatchable_graph(task_id,
-                                                                                             archived_timetable.dispatchable_graph)
+            dispatchable_graph = self.remove_task_from_dispatchable_graph(task_id, archived_timetable.dispatchable_graph)
+            if dispatchable_graph is not None:
+                archived_timetable.dispatchable_graph = dispatchable_graph
             archived_timetable.add_stn_task(stn_task)
         else:
             self.remove_task_from_dispatchable_graph(task_id)
@@ -202,12 +203,12 @@ class Timetable(STNInterface):
         if 0 < len(task_node_ids) < 3:
             archived_dispatchable_graph = self.dispatchable_graph.remove_node_ids(task_node_ids, archived_dispatchable_graph)
             self.dispatchable_graph.displace_nodes(0)
-            return archived_dispatchable_graph
         elif len(task_node_ids) == 3:
             node_id = self.dispatchable_graph.get_task_position(task_id)
             self.dispatchable_graph.remove_task(node_id)
         else:
             self.logger.warning("Task %s is not in timetable", task_id)
+        return archived_dispatchable_graph
 
     def remove_node_ids(self, task_node_ids):
         self.stn.remove_node_ids(task_node_ids)
@@ -352,7 +353,7 @@ class Timetable(STNInterface):
             # Resetting values
             self.stn = self.stp_solver.get_stn()
             self.dispatchable_graph = self.stp_solver.get_stn()
-            # self.store()
+            self.store()
 
     def fetch_archived(self):
         with switch_collection(TimetableMongo, TimetableMongo.Meta.archive_collection):
@@ -406,17 +407,13 @@ class TimetableManager:
         self.logger.debug("STN (archived) robot %s: %s", robot_id, timetable.stn)
         self.logger.debug("Dispatchable graph (archived) robot %s: %s", robot_id, timetable.dispatchable_graph)
 
-    def register_robot(self, robot):
-        self.logger.debug("Loading timetable of robot %s", robot.robot_id)
-        self.fetch_timetable(robot.robot_id)
-        self.fetch_archived_timetable(robot.robot_id)
+    def restore_timetable_data(self, robot_id):
+        self.logger.debug("Reading timetable of robot %s from the database", robot_id)
+        self.fetch_timetable(robot_id)
+        self.fetch_archived_timetable(robot_id)
 
     def unregister_robot(self, robot):
         self.timetables.pop(robot.robot_id)
-
-    def fetch_timetables(self):
-        for robot_id, timetable in self.timetables.items():
-            timetable.fetch()
 
     def get_timetable_update_reply(self, robot_ids, status, earliest_time, latest_time):
         timetables = list()
