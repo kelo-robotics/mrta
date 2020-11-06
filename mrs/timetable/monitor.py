@@ -166,7 +166,10 @@ class TimetableMonitorBase:
         if prev_task and next_task:
             self.update_pre_task_constraint(prev_task, next_task, timetable)
 
-        self.tasks.pop(task.task_id)
+        try:
+            self.tasks.pop(task.task_id)
+        except KeyError:
+            self.logger.error("Task %s was not in tasks", task.task_id)
 
         if store:
             timetable.store()
@@ -301,6 +304,7 @@ class TimetableMonitor(TimetableMonitorBase):
             successful_recomputation = super().re_compute_dispatchable_graph(timetable)
             if successful_recomputation:
                 self.auctioneer.changed_timetable.append(timetable.robot_id)
+                timetable.store()
                 return True
             elif not successful_recomputation and next_task:
                 self.recover(next_task)
