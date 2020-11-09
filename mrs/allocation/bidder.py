@@ -122,7 +122,7 @@ class Bidder:
 
             new_stn_task = self.get_stn_task(task, stn, insertion_point)
             stn.add_task(new_stn_task, insertion_point)
-            allocation_info = AllocationInfo(insertion_point, copy.deepcopy(new_stn_task))
+            allocation_info = AllocationInfo(copy.deepcopy(new_stn_task))
 
             next_task_id = stn.get_task_id(insertion_point + 1)
             if next_task_id:
@@ -133,7 +133,12 @@ class Bidder:
                 allocation_info.update_next_task(next_stn_task, copy.deepcopy(prev_version_next_stn_task))
 
             try:
-                bid = self.bidding_rule.compute_bid(stn, self.robot_id, self.round.round_id, task, allocation_info)
+                bid = self.bidding_rule.compute_bid(stn,
+                                                    self.robot_id,
+                                                    self.round.round_id,
+                                                    task,
+                                                    insertion_point,
+                                                    allocation_info)
                 self.logger.debug("Bid: %s", bid)
 
                 if best_bid is None or \
@@ -315,10 +320,8 @@ class Bidder:
         smallest_bid = None
 
         for bid in bids:
-
-            allocation_info = bid.get_allocation_info()
             try:
-                task_id = self.timetable.get_task_id(allocation_info.insertion_point)
+                task_id = self.timetable.get_task_id(bid.insertion_point)
                 task = self.tasks.get(task_id)
                 if task.is_frozen():
                     self.logger.debug("Bid %s is invalid", bid)
@@ -356,7 +359,7 @@ class Bidder:
         self.timetable.stn = allocation_info.stn
         self.timetable.dispatchable_graph = allocation_info.dispatchable_graph
 
-        self.logger.debug("Robot %s allocated task %s in insertion point %s", self.robot_id, task_id, allocation_info.insertion_point)
+        self.logger.debug("Robot %s allocated task %s in insertion point %s", self.robot_id, task_id, self.round.bid_placed.insertion_point)
         self.logger.debug("STN: \n %s", self.timetable.stn)
         self.logger.debug("Dispatchable graph: \n %s", self.timetable.dispatchable_graph)
 

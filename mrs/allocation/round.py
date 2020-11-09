@@ -123,7 +123,7 @@ class Round(SimulatorInterface):
 
         return False
 
-    def get_result(self):
+    def get_result(self, timetable_manager):
         """ Returns the results of the mrs as a tuple
 
         :return: round_result
@@ -138,7 +138,7 @@ class Round(SimulatorInterface):
         """
 
         try:
-            winning_bid = self.elect_winner()
+            winning_bid = self.elect_winner(timetable_manager)
 
             if winning_bid.alternative_start_time:
                 raise AlternativeTimeSlot(winning_bid)
@@ -164,7 +164,7 @@ class Round(SimulatorInterface):
                     tasks_without_bids.append(task)
         return tasks_without_bids
 
-    def elect_winner(self):
+    def elect_winner(self, timetable_manager):
         """ Elects the winner of the round
 
         :return:
@@ -175,6 +175,11 @@ class Round(SimulatorInterface):
         lowest_bid = None
 
         for task_id, bid in self.received_bids.items():
+
+            timetable = timetable_manager.get_timetable(bid.robot_id)
+            if self.is_task_frozen(timetable, bid.insertion_point):
+                continue
+
             if lowest_bid is None \
                     or bid < lowest_bid \
                     or (bid == lowest_bid and bid.task_id < lowest_bid.task_id):
@@ -187,12 +192,12 @@ class Round(SimulatorInterface):
 
         return lowest_bid
 
-    def is_task_frozen(self, timetable, allocation_info):
+    def is_task_frozen(self, timetable, insertion_point):
         try:
-            task_id = timetable.get_task_id(allocation_info.insertion_point)
+            task_id = timetable.get_task_id(insertion_point)
             task_to_replace = Task.get_task(task_id)
             if task_to_replace.is_frozen():
-                self.logger.warning("Task %s in position %s is frozen", task_id, allocation_info.insertion_point)
+                self.logger.warning("Task %s in position %s is frozen", task_id, insertion_point)
                 return True
             return False
         except TaskNotFound:

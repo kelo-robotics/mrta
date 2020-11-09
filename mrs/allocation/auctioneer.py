@@ -115,7 +115,7 @@ class Auctioneer(SimulatorInterface):
 
         if self.round.opened and self.round.time_to_close():
             try:
-                self.winning_bid = self.round.get_result()
+                self.winning_bid = self.round.get_result(self.timetable_manager)
                 self.process_winning_bid()
 
             except NoAllocation as e:
@@ -148,7 +148,7 @@ class Auctioneer(SimulatorInterface):
         task = self.tasks_to_allocate.pop(self.winning_bid.task_id)
         allocation_info = self.winning_bid.get_allocation_info()
         try:
-            timetable = self.timetable_manager.update_timetable(self.winning_bid.robot_id,
+            timetable = self.timetable_manager.update_timetable(self.winning_bid,
                                                                 allocation_info,
                                                                 task)
         except InvalidAllocation as e:
@@ -321,7 +321,7 @@ class Auctioneer(SimulatorInterface):
 
         if ack.accept and ack.robot_id not in self.changed_timetable:
             timetable = self.timetable_manager.get_timetable(self.winning_bid.robot_id)
-            if self.round.is_task_frozen(timetable, ack.allocation_info):
+            if self.round.is_task_frozen(timetable, self.winning_bid.insertion_point):
                 self.undo_allocation(ack.allocation_info)
             else:
                 self.logger.debug("Concluding allocation of task %s", ack.task_id)

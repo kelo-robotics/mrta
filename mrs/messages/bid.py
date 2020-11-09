@@ -1,4 +1,3 @@
-from fmlib.models.tasks import TimepointConstraint
 from mrs.utils.as_dict import AsDictMixin
 from stn.task import Task as STNTask
 
@@ -60,17 +59,17 @@ class NoBid(BidBase):
 
 
 class Bid(BidBase):
-    def __init__(self, task_id, robot_id, round_id, metrics, departure_time, **kwargs):
+    def __init__(self, task_id, robot_id, round_id, metrics, insertion_point, **kwargs):
         self.metrics = metrics
         self._allocation_info = None
-        self.departure_time = departure_time
+        self.insertion_point = insertion_point
         self.alternative_start_time = kwargs.get("alternative_start_time")
         super().__init__(task_id, robot_id, round_id)
 
     def __str__(self):
         to_print = ""
         to_print += "Bid (task: {}, robot: {}, metrics: {}".format(self.task_id, self.robot_id, self.metrics)
-        to_print += " departure_time: {}".format(self.departure_time)
+        to_print += " insertion_point: {}".format(self.insertion_point)
         if self.alternative_start_time:
             to_print += " alternative_start_time: {}".format(self.alternative_start_time)
         else:
@@ -107,13 +106,11 @@ class Bid(BidBase):
     def to_attrs(cls, dict_repr):
         attrs = super().to_attrs(dict_repr)
         attrs.update(metrics=Metrics.from_dict(dict_repr.get("metrics")))
-        attrs.update(departure_time=TimepointConstraint.from_payload(dict_repr.get("departure_time")))
         return attrs
 
 
 class AllocationInfo(AsDictMixin):
-    def __init__(self, insertion_point, new_task, next_task=None, prev_version_next_task=None):
-        self.insertion_point = insertion_point
+    def __init__(self, new_task, next_task=None, prev_version_next_task=None):
         self.new_task = new_task
         self.next_task = next_task
         self.prev_version_next_task = prev_version_next_task

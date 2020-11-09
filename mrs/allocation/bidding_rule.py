@@ -1,7 +1,5 @@
 import math
-from datetime import timedelta
 
-from fmlib.models.tasks import TimepointConstraint
 from mrs.messages.bid import Bid, Metrics
 from stn.exceptions.stp import NoSTPSolution
 
@@ -30,25 +28,17 @@ class BiddingRuleBase:
         temporal_metric = dispatchable_graph.compute_temporal_metric(self.temporal_criterion)
         return Metrics(temporal_metric)
 
-    def compute_bid(self, stn, robot_id, round_id, task, allocation_info):
+    def compute_bid(self, stn, robot_id, round_id, task, insertion_point, allocation_info):
         try:
             dispatchable_graph = self.timetable.compute_dispatchable_graph(stn)
             metrics = self.compute_metrics(dispatchable_graph, allocation_info=allocation_info)
-
-            r_earliest_departure_time = dispatchable_graph.get_time(task.task_id, "departure")
-            r_latest_departure_time = dispatchable_graph.get_time(task.task_id, "departure", lower_bound=False)
-            earliest_departure_time = self.timetable.ztp + timedelta(seconds=r_earliest_departure_time)
-            latest_departure_time = self.timetable.ztp + timedelta(seconds=r_latest_departure_time)
-
-            departure_time = TimepointConstraint(earliest_time=earliest_departure_time.to_datetime(),
-                                                 latest_time=latest_departure_time.to_datetime())
 
             if task.constraints.hard:
                 bid = Bid(task.task_id,
                           robot_id,
                           round_id,
                           metrics,
-                          departure_time)
+                          insertion_point)
             else:
                 temporal_metric = abs(task.start_constraint.earliest_time - task.request.earliest_start_time.utc_time).total_seconds()
                 metrics.objective = temporal_metric
@@ -58,7 +48,7 @@ class BiddingRuleBase:
                           robot_id,
                           round_id,
                           metrics,
-                          departure_time,
+                          insertion_point,
                           alternative_start_time=alternative_start_time)
 
             bid.set_allocation_info(allocation_info)

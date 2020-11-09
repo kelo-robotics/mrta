@@ -441,11 +441,11 @@ class TimetableManager:
 
         return timetables
 
-    def update_timetable(self, robot_id, allocation_info, task):
-        timetable = self.timetables.get(robot_id)
+    def update_timetable(self, winning_bid, allocation_info, task):
+        timetable = self.timetables.get(winning_bid.robot_id)
         stn = copy.deepcopy(timetable.stn)
 
-        stn.add_task(allocation_info.new_task, allocation_info.insertion_point)
+        stn.add_task(allocation_info.new_task, winning_bid.insertion_point)
         if allocation_info.next_task:
             stn.update_task(allocation_info.next_task)
 
@@ -454,21 +454,21 @@ class TimetableManager:
 
         except NoSTPSolution:
             self.logger.warning("The STN is inconsistent with task %s in insertion point %s", task.task_id,
-                                allocation_info.insertion_point)
-            self.logger.debug("STN robot %s: %s", robot_id, timetable.stn)
-            self.logger.debug("Dispatchable graph robot %s: %s", robot_id, timetable.dispatchable_graph)
+                                winning_bid.insertion_point)
+            self.logger.debug("STN robot %s: %s", winning_bid.robot_id, timetable.stn)
+            self.logger.debug("Dispatchable graph robot %s: %s", winning_bid.robot_id, timetable.dispatchable_graph)
 
-            raise InvalidAllocation(task.task_id, robot_id, allocation_info.insertion_point)
+            raise InvalidAllocation(task.task_id, winning_bid.robot_id, winning_bid.insertion_point)
 
         timetable.add_stn_task(allocation_info.new_task)
         if allocation_info.next_task:
             timetable.add_stn_task(allocation_info.next_task)
 
         timetable.stn = stn
-        self.timetables.update({robot_id: timetable})
+        self.timetables.update({winning_bid.robot_id: timetable})
         timetable.store()
 
-        self.logger.debug("STN robot %s: %s", robot_id, timetable.stn)
-        self.logger.debug("Dispatchable graph robot %s: %s", robot_id, timetable.dispatchable_graph)
+        self.logger.debug("STN robot %s: %s", winning_bid.robot_id, timetable.stn)
+        self.logger.debug("Dispatchable graph robot %s: %s", winning_bid.robot_id, timetable.dispatchable_graph)
         return timetable
 
