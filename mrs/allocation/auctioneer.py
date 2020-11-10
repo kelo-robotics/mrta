@@ -75,24 +75,26 @@ class Auctioneer(SimulatorInterface):
         self.robots[robot.robot_id] = robot
 
     def unregister_robot(self, robot):
-        self.logger.warning("Unregistering robot %s", robot.robot_id)
+        tasks_to_re_allocate = list()
+        if robot.robot_id in self.robots:
+            self.logger.warning("Unregistering robot %s", robot.robot_id)
 
-        for task_id, task in self.tasks_to_allocate.items():
-            if robot.robot_id in task.capable_robots:
-                self.logger.debug("Removing robot %s from capable robots for task %s", robot.robot_id, task_id)
-                task.capable_robots.remove(robot.robot_id)
-            if robot.robot_id in task.eligible_robots:
-                self.logger.debug("Removing robot %s from eligible robots for task %s", robot.robot_id, task_id)
-                task.eligible_robots.remove(robot.robot_id)
-                self.eligible_robots[robot.robot_id].remove_task(task)
+            for task_id, task in self.tasks_to_allocate.items():
+                if robot.robot_id in task.capable_robots:
+                    self.logger.debug("Removing robot %s from capable robots for task %s", robot.robot_id, task_id)
+                    task.capable_robots.remove(robot.robot_id)
+                if robot.robot_id in task.eligible_robots:
+                    self.logger.debug("Removing robot %s from eligible robots for task %s", robot.robot_id, task_id)
+                    task.eligible_robots.remove(robot.robot_id)
+                    self.eligible_robots[robot.robot_id].remove_task(task)
 
-        self.robots.pop(robot.robot_id)
-        self.eligible_robots.pop(robot.robot_id)
+            self.robots.pop(robot.robot_id)
+            self.eligible_robots.pop(robot.robot_id)
 
-        tasks_to_re_allocate = [task for task_id, task in self.allocated_tasks.items() if robot.robot_id in
-                                task.assigned_robots]
-        self.logger.warning("The following tasks will be re-allocated: %s",
-                            [task.task_id for task in tasks_to_re_allocate])
+            tasks_to_re_allocate = [task for task_id, task in self.allocated_tasks.items() if robot.robot_id in
+                                    task.assigned_robots]
+            self.logger.warning("The following tasks will be re-allocated: %s",
+                                [task.task_id for task in tasks_to_re_allocate])
 
         return tasks_to_re_allocate
 
