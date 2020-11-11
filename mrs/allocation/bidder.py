@@ -135,7 +135,7 @@ class Bidder:
 
                 next_stn_task, prev_version_next_stn_task = self.get_next_stn_task(stn, next_task, insertion_point)
                 stn.update_task(next_stn_task)
-                allocation_info.update_next_task(next_stn_task, copy.deepcopy(prev_version_next_stn_task))
+                allocation_info.update_next_task(copy.deepcopy(next_stn_task), copy.deepcopy(prev_version_next_stn_task))
 
             self.logger.debug("STN: %s", stn)
 
