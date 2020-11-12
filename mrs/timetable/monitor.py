@@ -24,8 +24,6 @@ class TimetableMonitorBase:
         self.timetable = kwargs.get("timetable")
         self.d_graph_watchdog = kwargs.get("d_graph_watchdog", False)
         self.api = kwargs.get('api')
-        self.logger = logging.getLogger("mrs.timetable.monitor")
-        self.logger.addFilter(ContextFilter())
         self.tasks = dict()
 
     def configure(self, **kwargs):
@@ -236,6 +234,8 @@ class TimetableMonitor(TimetableMonitorBase):
         self.completed_tasks = list()
         self.deleting_task = False
         self.processing_task = False
+        self.logger = logging.getLogger("mrs.timetable.monitor")
+        self.logger.addFilter(ContextFilter())
         self.logger.debug("Timetable monitor started")
 
     def task_status_cb(self, msg):
