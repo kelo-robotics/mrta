@@ -9,6 +9,7 @@ from mrs.exceptions.allocation import NoAllocation
 from mrs.exceptions.allocation import TaskNotFound
 from mrs.messages.bid import NoBid
 from mrs.simulation.simulator import SimulatorInterface
+from ropod.utils.logging.counter import ContextFilter
 from ropod.utils.uuid import generate_uuid
 
 
@@ -28,7 +29,6 @@ class Round(SimulatorInterface):
         simulator = kwargs.get('simulator')
         super().__init__(simulator)
 
-        self.logger = logging.getLogger('mrs.auctioneer.round')
         self.eligible_robots = eligible_robots
         self.tasks = tasks
 
@@ -42,6 +42,9 @@ class Round(SimulatorInterface):
         self.received_no_bids = dict()
         self.start_time = datetime.now().timestamp()
         self.time_to_allocate = None
+
+        self.logger = logging.getLogger('mrs.auctioneer.round.%s' % self.id)
+        self.logger.addFilter(ContextFilter())
 
     def start(self):
         """ Starts and auction round:

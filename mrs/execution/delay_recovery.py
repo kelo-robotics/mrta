@@ -2,6 +2,7 @@ import logging
 
 from fmlib.models import tasks
 from ropod.structs.status import ActionStatus as ActionStatusConst
+from ropod.utils.logging.counter import ContextFilter
 
 
 class RecoveryMethod:
@@ -10,6 +11,7 @@ class RecoveryMethod:
 
     def __init__(self, name):
         self.logger = logging.getLogger('mrs.recovery.method')
+        self.logger.addFilter(ContextFilter())
         self.name = self.validate_name(name)
 
     def validate_name(self, name):

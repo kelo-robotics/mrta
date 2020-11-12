@@ -12,8 +12,8 @@ from mrs.messages.bid import EligibleRobot
 from mrs.messages.task_announcement import TaskAnnouncement
 from mrs.messages.task_contract import TaskContract, TaskContractAcknowledgment, TaskContractCancellation
 from mrs.simulation.simulator import SimulatorInterface
-from mrs.utils.time import to_timestamp
 from ropod.structs.status import TaskStatus as TaskStatusConst
+from ropod.utils.logging.counter import ContextFilter
 
 """ Implements a variation of the the TeSSI algorithm using the bidding_rule 
 specified in the config file
@@ -27,6 +27,7 @@ class Auctioneer(SimulatorInterface):
         super().__init__(simulator)
 
         self.logger = logging.getLogger("mrs.auctioneer")
+        self.logger.addFilter(ContextFilter())
         self.api = kwargs.get('api')
         self.ccu_store = kwargs.get('ccu_store')
         self.robots = dict()
@@ -97,9 +98,6 @@ class Auctioneer(SimulatorInterface):
                                 [task.task_id for task in tasks_to_re_allocate])
 
         return tasks_to_re_allocate
-
-    def set_ztp(self, time_):
-        self.timetable_manager.ztp = time_
 
     def run(self):
         if self.tasks_to_allocate and self.round.finished:
@@ -253,7 +251,7 @@ class Auctioneer(SimulatorInterface):
 
         self.logger.debug("Auctioneer announces tasks %s", tasks.keys())
 
-        task_announcement = TaskAnnouncement(list(tasks.values()), self.round.id, self.timetable_manager.ztp)
+        task_announcement = TaskAnnouncement(list(tasks.values()), self.round.id)
         msg = self.api.create_message(task_announcement)
         self.round.start()
         self.api.publish(msg, groups=['TASK-ALLOCATION'])
@@ -352,30 +350,4 @@ class Auctioneer(SimulatorInterface):
         else:
             self.logger.warning("Round %s has to be repeated", self.round.id)
             self.finish_round()
-
-    def get_task_schedule(self, task_id, robot_id):
-        """ Returns a dict
-            departure_time: earliest departure time according to the dispatchable graph
-            start_time : earliest start time according to the dispatchable graph
-            finish_time: latest finish time according to the dispatchable graph
-        """
-        timetable = self.timetable_manager.get(robot_id)
-
-        r_earliest_departure_time = timetable.dispatchable_graph.get_time(task_id, "departure")
-        r_earliest_start_time = timetable.dispatchable_graph.get_time(task_id, "start")
-        r_latest_finish_time = timetable.dispatchable_graph.get_time(task_id, "finish", False)
-
-        departure_time = to_timestamp(self.timetable_manager.ztp, r_earliest_departure_time)
-        start_time = to_timestamp(self.timetable_manager.ztp, r_earliest_start_time)
-        finish_time = to_timestamp(self.timetable_manager.ztp, r_latest_finish_time)
-
-        self.logger.debug("Task %s departure time: %s", task_id, departure_time)
-        self.logger.debug("Task %s earliest start time : %s", task_id, start_time)
-        self.logger.debug("Task %s latest finish time: %s", task_id, finish_time)
-
-        task_schedule = {"departure_time": departure_time.to_datetime(),
-                         "start_time": start_time.to_datetime(),
-                         "finish_time": finish_time.to_datetime()}
-
-        return task_schedule
 

@@ -1,17 +1,15 @@
-import logging
-
 from mrs.allocation.auctioneer import Auctioneer
 from mrs.allocation.bidder import Bidder
-from mrs.execution.dispatcher import Dispatcher
 from mrs.execution.delay_recovery import DelayRecovery
+from mrs.execution.dispatcher import Dispatcher
 from mrs.execution.executor import Executor
 from mrs.execution.fleet_monitor import FleetMonitor
 from mrs.execution.schedule_execution_monitor import ScheduleExecutionMonitor
 from mrs.execution.scheduler import Scheduler
 from mrs.performance.tracker import PerformanceTracker
 from mrs.simulation.simulator import Simulator
-from mrs.timetable.timetable import Timetable, TimetableManager
 from mrs.timetable.monitor import TimetableMonitor
+from mrs.timetable.timetable import Timetable, TimetableManager
 from stn.stp import STP
 
 
@@ -62,8 +60,6 @@ class MRTABuilder:
                 allocation_method(str): name of the allocation method
 
         """
-
-        self.logger = logging.getLogger('mrta.config.components')
         self._components = dict()
         self._component_modules = kwargs.get('component_modules', self._component_modules)
         self.config_order = kwargs.get('config_order', self._config_order)
@@ -78,12 +74,11 @@ class MRTABuilder:
         allocation_method = self._components.get('allocation_method')
         solver_name = self._allocation_methods.get(allocation_method)
         if not solver_name:
-            self.logger.error("The given allocation method is not available")
+            print("The given allocation method is not available")
             raise ValueError(allocation_method)
         return STP(solver_name)
 
     def configure_component(self, component_name, config, **kwargs):
-        self.logger.debug("Creating %s", component_name)
         component = self._component_modules.get(component_name)
 
         if component and isinstance(config, dict):

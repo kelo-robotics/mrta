@@ -15,6 +15,7 @@ from mrs.timetable.stn_interface import STNInterface
 from mrs.utils.time import to_timestamp
 from pymodm.context_managers import switch_collection
 from pymodm.errors import DoesNotExist
+from ropod.utils.logging.counter import ContextFilter
 from ropod.utils.timestamp import TimeStamp
 from stn.exceptions.stp import NoSTPSolution
 from stn.methods.fpc import get_minimal_network
@@ -48,7 +49,6 @@ class Timetable(STNInterface):
         super().__init__(self.ztp, self.stn, self.dispatchable_graph)
 
         self.logger = logging.getLogger("mrs.timetable.%s" % self.robot_id)
-        self.logger.debug("Timetable %s started", self.robot_id)
 
     def update_ztp(self, time_):
         self.ztp.timestamp = time_
@@ -337,7 +337,7 @@ class Timetable(STNInterface):
     def archive(self):
         timetable = self.to_model()
         with switch_collection(TimetableMongo, TimetableMongo.Meta.archive_collection):
-           timetable.save()
+            timetable.save()
 
     def fetch(self):
         try:
@@ -371,6 +371,7 @@ class TimetableManager:
         self.timetables = dict()
         self.archived_timetables = dict()
         self.logger = logging.getLogger("mrs.timetable.manager")
+        self.logger.addFilter(ContextFilter())
         self.stp_solver = stp_solver
         self.simulator = kwargs.get('simulator')
 
@@ -397,11 +398,15 @@ class TimetableManager:
 
     def fetch_timetable(self, robot_id):
         timetable = Timetable(robot_id, self.stp_solver, simulator=self.simulator)
+        timetable.logger = logging.getLogger("mrs.timetable.%s" % robot_id)
+        timetable.logger.addFilter(ContextFilter())
         timetable.fetch()
         self.timetables[robot_id] = timetable
 
     def fetch_archived_timetable(self, robot_id):
         timetable = Timetable(robot_id, self.stp_solver, simulator=self.simulator)
+        timetable.logger = logging.getLogger("mrs.timetable_archive.%s" % robot_id)
+        timetable.logger.addFilter(ContextFilter())
         timetable.fetch_archived()
         self.archived_timetables[robot_id] = timetable
 

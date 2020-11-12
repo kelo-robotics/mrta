@@ -1,19 +1,16 @@
 from fmlib.models import tasks
 from mrs.utils.as_dict import AsDictMixin
-from ropod.utils.timestamp import TimeStamp
 from ropod.utils.uuid import generate_uuid
 
 
 class TaskAnnouncement(AsDictMixin):
-    def __init__(self, tasks, round_id, ztp):
+    def __init__(self, tasks, round_id):
         """
         Constructor for the TaskAnnouncement object
 
         Args:
              tasks (list): List of Task objects to be announced
              round_id (str): A string of the format UUID that identifies the round
-             ztp (TimeStamp): Zero Time Point. Origin time to which task temporal information must be
-                                        referenced to
         """
         self.tasks = tasks
 
@@ -21,8 +18,6 @@ class TaskAnnouncement(AsDictMixin):
             self.round_id = generate_uuid()
         else:
             self.round_id = round_id
-
-        self.ztp = ztp
 
     def to_dict(self):
         dict_repr = super().to_dict()

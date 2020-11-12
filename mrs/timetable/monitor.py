@@ -13,6 +13,7 @@ from mrs.simulation.simulator import SimulatorInterface
 from mrs.utils.time import relative_to_ztp
 from pymodm.errors import DoesNotExist
 from ropod.structs.status import TaskStatus as TaskStatusConst, ActionStatus as ActionStatusConst
+from ropod.utils.logging.counter import ContextFilter
 from ropod.utils.timestamp import TimeStamp
 from stn.exceptions.stp import NoSTPSolution
 
@@ -24,6 +25,7 @@ class TimetableMonitorBase:
         self.d_graph_watchdog = kwargs.get("d_graph_watchdog", False)
         self.api = kwargs.get('api')
         self.logger = logging.getLogger("mrs.timetable.monitor")
+        self.logger.addFilter(ContextFilter())
         self.tasks = dict()
 
     def configure(self, **kwargs):
@@ -100,6 +102,7 @@ class TimetableMonitorBase:
             self.timetable_manager.archived_timetables[timetable.robot_id] = archived_timetable
             self.logger.debug("Dispatchable graph (archive) robot %s: %s", archived_timetable.robot_id, archived_timetable.dispatchable_graph)
             archived_timetable.archive()
+            self.timetable_manager.archived_timetables[timetable.robot_id] = archived_timetable
 
     def _update_progress(self, task, task_status, timestamp):
         task_progress = task_status.task_progress
@@ -198,6 +201,7 @@ class TimetableMonitorBase:
         self.timetable_manager.archived_timetables[timetable.robot_id] = archived_timetable
         self.logger.debug("Dispatchable graph (archive) %s", archived_timetable.dispatchable_graph)
         archived_timetable.archive()
+        self.timetable_manager.archived_timetables[timetable.robot_id] = archived_timetable
 
     def update_pre_task_constraint(self, prev_task, task, timetable):
         self.logger.debug("Update pre_task constraint of task %s", task.task_id)
@@ -381,8 +385,9 @@ class TimetableMonitorProxy(TimetableMonitorBase):
         super().__init__(**kwargs)
         self.robot_id = robot_id
         self.bidder = bidder
-        self.logger = logging.getLogger("mrs.proxy.timetable.monitor")
-        self.logger.debug("Timetable monitor started")
+        self.logger = logging.getLogger("mrs.proxy.timetable.monitor.%s" % robot_id)
+        self.logger.addFilter(ContextFilter())
+        self.logger.debug("Timetable monitor robot %s started", self.robot_id)
 
     def process_task_status(self, task_status, timestamp):
         if self.robot_id == task_status.robot_id:

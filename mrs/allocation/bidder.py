@@ -12,6 +12,7 @@ from mrs.messages.task_announcement import TaskAnnouncement
 from mrs.messages.task_contract import TaskContract, TaskContractAcknowledgment, TaskContractCancellation
 from mrs.utils.time import relative_to_ztp
 from pymodm.errors import DoesNotExist
+from ropod.utils.logging.counter import ContextFilter
 from stn.exceptions.stp import NoSTPSolution
 
 """ Implements a variation of the the TeSSI algorithm using the bidding_rule
@@ -48,7 +49,8 @@ class Bidder:
         self.tasks = dict()
 
         self.logger = logging.getLogger('mrs.bidder.%s' % self.robot_id)
-        self.logger.debug("Bidder initialized %s", self.robot_id)
+        self.logger.addFilter(ContextFilter())
+        self.logger.debug("Bidder robot %s initialized", self.robot_id)
 
     def configure(self, **kwargs):
         for key, value in kwargs.items():
