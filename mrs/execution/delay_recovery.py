@@ -61,7 +61,7 @@ class RecoveryMethod:
         self.logger.debug("Latest permitted departure time of next task: %s ", latest_departure_time_next_task)
 
         estimated_departure_time_of_next_task = r_assigned_time + estimated_duration
-        self.logger.debug("Estimated start time of next task: %s ", estimated_departure_time_of_next_task)
+        self.logger.debug("Estimated departure time of next task: %s ", estimated_departure_time_of_next_task)
 
         if estimated_departure_time_of_next_task > latest_departure_time_next_task:
             self.logger.warning("Task %s is at risk", next_task_id)
