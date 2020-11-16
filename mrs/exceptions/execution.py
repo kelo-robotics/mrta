@@ -34,3 +34,8 @@ class InconsistentAssignment(Exception):
 class EmptyTimetable(Exception):
     def __init__(self):
         """Raised when the timetable is empty"""
+
+
+class TaskNotAllocated(Exception):
+    def __init__(self):
+        """Raised when a task is not allocated"""

@@ -6,7 +6,7 @@ from fmlib.models.robot import Robot
 from fmlib.models.tasks import TransportationTask as Task
 from fmlib.utils.utils import task_status_names
 from mrs.exceptions.allocation import TaskNotFound
-from mrs.exceptions.execution import EmptyTimetable
+from mrs.exceptions.execution import EmptyTimetable, TaskNotAllocated
 from mrs.messages.remove_task import RemoveTaskFromSchedule
 from mrs.messages.task_status import TaskStatus, TaskProgress
 from mrs.simulation.simulator import SimulatorInterface
@@ -146,14 +146,6 @@ class TimetableMonitorBase:
 
     def remove_task_from_timetable(self, timetable, task, status, next_task=None, store=True):
         self.logger.debug("Deleting task %s from timetable ", task.task_id)
-
-        if not timetable.has_task(task.task_id):
-            self.logger.warning("Robot %s does not have task %s in its timetable: ", timetable.robot_id, task.task_id)
-            raise TaskNotFound
-
-        if timetable.stn.is_empty():
-            self.logger.warning("Timetable of %s is empty", timetable.robot_id)
-            raise EmptyTimetable
 
         prev_task_id = timetable.get_previous_task_id(task)
         prev_task = self.tasks.get(prev_task_id)
@@ -323,28 +315,44 @@ class TimetableMonitor(TimetableMonitorBase):
             self.re_allocate(task)
 
     def remove_task(self, task, status):
+
+        if not task.assigned_robots:
+            self.logger.error("Task %s is not assigned to any robot, therefore it cannot be removed from a timetable", task.task_id)
+            raise TaskNotAllocated
+
         for robot_id in task.assigned_robots:
-            try:
-                timetable = self.get_timetable(robot_id)
-                next_task_id = timetable.get_next_task_id(task)
-                if next_task_id:
-                    next_task = Task.get_task(next_task_id)
-                else:
-                    next_task = None
-                self.remove_task_from_timetable(timetable, task, status, next_task)
-                # TODO: The robot should send a ropod-pose msg and the fleet monitor should update the robot pose
-                if status == TaskStatusConst.COMPLETED:
-                    self.update_robot_poses(task)
-                task.update_status(status)
-                self.auctioneer.changed_timetable.append(timetable.robot_id)
-                self.send_remove_task(task.task_id, status, robot_id)
-                self.re_compute_dispatchable_graph(timetable, next_task)
-            except (TaskNotFound, EmptyTimetable):
-                return
+            timetable = self.get_timetable(robot_id)
+
+            if not timetable.has_task(task.task_id):
+                self.logger.warning("Robot %s does not have task %s in its timetable: ", timetable.robot_id,
+                                    task.task_id)
+                raise TaskNotFound
+
+            if timetable.stn.is_empty():
+                self.logger.warning("Timetable of %s is empty", timetable.robot_id)
+                raise EmptyTimetable
+
+            next_task_id = timetable.get_next_task_id(task)
+            if next_task_id:
+                next_task = Task.get_task(next_task_id)
+            else:
+                next_task = None
+            self.remove_task_from_timetable(timetable, task, status, next_task)
+            # TODO: The robot should send a ropod-pose msg and the fleet monitor should update the robot pose
+            if status == TaskStatusConst.COMPLETED:
+                self.update_robot_poses(task)
+            task.update_status(status)
+            self.auctioneer.changed_timetable.append(timetable.robot_id)
+            self.send_remove_task(task.task_id, status, robot_id)
+            self.re_compute_dispatchable_graph(timetable, next_task)
 
     def re_allocate(self, task):
         self.logger.info("Re-allocating task %s", task.task_id)
-        self.remove_task(task, TaskStatusConst.UNALLOCATED)
+        try:
+            self.remove_task(task, TaskStatusConst.UNALLOCATED)
+        except (TaskNotAllocated, TaskNotFound, EmptyTimetable):
+            self.logger.error("Task %s could not be removed from timetable", task.task_id)
+            return
         task.api = self.api
         task.unassign_robots()
         self.tasks[task.task_id] = task
@@ -354,7 +362,11 @@ class TimetableMonitor(TimetableMonitorBase):
 
     def cancel(self, task):
         self.logger.info("Cancelling task %s", task.task_id)
-        self.remove_task(task, TaskStatusConst.CANCELED)
+        try:
+            self.remove_task(task, TaskStatusConst.CANCELED)
+        except (TaskNotAllocated, TaskNotFound, EmptyTimetable):
+            self.logger.error("Task %s could not be removed from timetable", task.task_id)
+            return
 
     def send_remove_task(self, task_id, status, robot_id):
         self.logger.debug("Sending remove-task-from-schedule for task %s to robot %s", task_id, robot_id)
@@ -401,22 +413,32 @@ class TimetableMonitorProxy(TimetableMonitorBase):
         payload = msg['payload']
         remove_task = RemoveTaskFromSchedule.from_payload(payload)
         task = self.tasks.get(remove_task.task_id)
-        self.logger.debug("Received remote-task-from-schedule for task %s", task.task_id)
-        self.remove_task(task, remove_task.status)
+        self.logger.debug("Received remove-task-from-schedule for task %s", task.task_id)
+        try:
+            self.remove_task(task, remove_task.status)
+        except (TaskNotFound, EmptyTimetable):
+            self.logger.error("Task %s could not be removed from timetable", task.task_id)
 
     def remove_task(self, task, status):
-        try:
-            timetable = self.get_timetable(self.robot_id)
-            next_task_id = timetable.get_next_task_id(task)
-            next_task = self.tasks.get(next_task_id, None)
-            self.remove_task_from_timetable(timetable, task, status, next_task, store=False)
-            # TODO: The robot should send a ropod-pose msg and the robot proxy should update the robot pose
-            if status == TaskStatusConst.COMPLETED:
-                self.update_robot_pose(task)
-            self.bidder.changed_timetable = True
-            self.re_compute_dispatchable_graph(timetable, next_task)
-        except (TaskNotFound, EmptyTimetable):
-            return
+        timetable = self.get_timetable(self.robot_id)
+
+        if not timetable.has_task(task.task_id):
+            self.logger.warning("Robot %s does not have task %s in its timetable: ", timetable.robot_id,
+                                task.task_id)
+            raise TaskNotFound
+
+        if timetable.stn.is_empty():
+            self.logger.warning("Timetable of %s is empty", timetable.robot_id)
+            raise EmptyTimetable
+
+        next_task_id = timetable.get_next_task_id(task)
+        next_task = self.tasks.get(next_task_id, None)
+        self.remove_task_from_timetable(timetable, task, status, next_task, store=False)
+        # TODO: The robot should send a ropod-pose msg and the robot proxy should update the robot pose
+        if status == TaskStatusConst.COMPLETED:
+            self.update_robot_pose(task)
+        self.bidder.changed_timetable = True
+        self.re_compute_dispatchable_graph(timetable, next_task)
 
     def _remove_task(self, task, timetable):
         timetable.remove_task(task.task_id)
