@@ -367,6 +367,7 @@ class TimetableMonitor(TimetableMonitorBase):
         except (TaskNotAllocated, TaskNotFound, EmptyTimetable):
             self.logger.error("Task %s could not be removed from timetable", task.task_id)
             return
+        task.update_status(TaskStatusConst.CANCELED)
 
     def send_remove_task(self, task_id, status, robot_id):
         self.logger.debug("Sending remove-task-from-schedule for task %s to robot %s", task_id, robot_id)
