@@ -148,6 +148,8 @@ class TimetableMonitorBase:
         self.logger.debug("Deleting task %s from timetable ", task.task_id)
 
         prev_task_id = timetable.get_previous_task_id(task)
+        self.logger.debug("Previous task to task %s : %s", task.task_id, prev_task_id)
+        self.logger.debug("Next task to task %s : %s", next_task.task_id)
         prev_task = self.tasks.get(prev_task_id)
         earliest_task_id = timetable.get_task_id(position=1)
 
@@ -200,9 +202,12 @@ class TimetableMonitorBase:
         mean, variance = self.planner.get_estimated_duration(path)
 
         stn_task = timetable.get_stn_task(task.task_id)
-        stn_task.update_edge("travel_time", mean, variance)
-        timetable.add_stn_task(stn_task)
-        timetable.update_task(stn_task)
+        if stn_task:
+            stn_task.update_edge("travel_time", mean, variance)
+            timetable.add_stn_task(stn_task)
+            timetable.update_task(stn_task)
+        else:
+            self.logger.error("Task %s is not in timetable.stn_tasks", task.task_id)
 
     def update_robot_poses(self, task):
         for robot_id in task.assigned_robots:
