@@ -122,9 +122,8 @@ class Bidder:
 
             stn = copy.deepcopy(self.timetable.stn)
 
-            try:
-                new_stn_task = self.get_stn_task(task, stn, insertion_point)
-            except TaskNotFound:
+            new_stn_task = self.get_stn_task(task, stn, insertion_point)
+            if new_stn_task is None:
                 self.logger.debug("Stop bid computation")
                 return
 
@@ -135,7 +134,11 @@ class Bidder:
             if next_task_id:
                 next_task = self.tasks.get(next_task_id)
 
-                next_stn_task, prev_version_next_stn_task = self.get_next_stn_task(stn, next_task, insertion_point)
+                next_stn_task_info = self.get_next_stn_task(stn, next_task, insertion_point)
+                if next_stn_task_info is None:
+                    self.logger.debug("Stop bid computation")
+                    return
+                next_stn_task, prev_version_next_stn_task = next_stn_task_info
                 stn.update_task(next_stn_task)
                 allocation_info.update_next_task(copy.deepcopy(next_stn_task), copy.deepcopy(prev_version_next_stn_task))
 
@@ -172,8 +175,8 @@ class Bidder:
         return best_bid
 
     def get_stn_task(self, task, stn, insertion_point):
-        try:
-            prev_location = self.get_previous_location(stn, insertion_point)
+        prev_location = self.get_previous_location(stn, insertion_point)
+        if prev_location:
             travel_time = self.get_travel_time(task, prev_location)
             stn_task = self.timetable.get_stn_task(task.task_id)
 
@@ -187,21 +190,19 @@ class Bidder:
                 self.timetable.add_stn_task(new_stn_task)
 
             return new_stn_task
-        except TaskNotFound:
-            raise
 
     def get_next_stn_task(self, stn, next_task, insertion_point):
         self.logger.debug("Updating previous location, start and travel constraints of task %s ", next_task.task_id)
-
         prev_version_next_stn_task = self.timetable.get_stn_task(next_task.task_id)
         prev_location = self.get_previous_location(stn, insertion_point + 1)
-        travel_time = self.get_travel_time(next_task, prev_location)
+        if prev_location:
+            travel_time = self.get_travel_time(next_task, prev_location)
 
-        next_stn_task = self.timetable.update_stn_task(prev_version_next_stn_task,
-                                                       travel_time,
-                                                       next_task,
-                                                       insertion_point + 1)
-        return next_stn_task, prev_version_next_stn_task
+            next_stn_task = self.timetable.update_stn_task(prev_version_next_stn_task,
+                                                           travel_time,
+                                                           next_task,
+                                                           insertion_point + 1)
+            return next_stn_task, prev_version_next_stn_task
 
     def place_bids(self):
         self.task_announcement = None
@@ -277,6 +278,7 @@ class Bidder:
             return False
 
     def get_previous_location(self, stn, insertion_point):
+        previous_location = None
         if insertion_point == 1:
             try:
                 pose = self.robot.position
@@ -291,7 +293,6 @@ class Bidder:
                 previous_location = previous_task.request.finish_location
             else:
                 self.logger.error("No task found at insertion point %s", insertion_point)
-                raise TaskNotFound(insertion_point)
 
         self.logger.debug("Previous location: %s ", previous_location)
         return previous_location
