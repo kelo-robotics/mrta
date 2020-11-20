@@ -148,8 +148,6 @@ class TimetableMonitorBase:
         self.logger.debug("Deleting task %s from timetable ", task.task_id)
 
         prev_task_id = timetable.get_previous_task_id(task)
-        self.logger.debug("Previous task to task %s : %s", task.task_id, prev_task_id)
-        self.logger.debug("Next task to task %s : %s", next_task.task_id)
         prev_task = self.tasks.get(prev_task_id)
         earliest_task_id = timetable.get_task_id(position=1)
 
@@ -159,6 +157,8 @@ class TimetableMonitorBase:
             self._remove_task(task, timetable)
 
         if prev_task and next_task:
+            self.logger.debug("Previous task to task %s : %s", task.task_id, prev_task_id)
+            self.logger.debug("Next task to task %s : %s", next_task.task_id)
             self.update_pre_task_constraint(prev_task, next_task, timetable)
 
         try:
