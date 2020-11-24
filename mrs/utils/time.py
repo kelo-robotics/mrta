@@ -21,3 +21,8 @@ def to_timestamp(ztp, r_time):
         time_ = ztp + timedelta(seconds=r_time)
     return time_
 
+
+def is_valid_time(time_):
+    if time_ > TimeStamp().to_datetime():
+        return True
+    return False
