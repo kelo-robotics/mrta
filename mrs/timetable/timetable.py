@@ -1,5 +1,6 @@
 import copy
 import logging
+import threading
 from datetime import timedelta
 
 from fmlib.models.tasks import Task
@@ -47,6 +48,7 @@ class Timetable(STNInterface):
         self.stn = self.stp_solver.get_stn()
         self.dispatchable_graph = self.stp_solver.get_stn()
         super().__init__(self.ztp, self.stn, self.dispatchable_graph)
+        self.lock = threading.RLock()
 
         self.logger = logging.getLogger("mrs.timetable.%s" % self.robot_id)
 
