@@ -38,10 +38,17 @@ class BidBase(AsDictMixin):
         self.task_id = task_id
         self.robot_id = robot_id
         self.round_id = round_id
+        self._performance = None
 
     @property
     def meta_model(self):
         return "bid-base"
+
+    def set_performance(self, performance):
+        self._performance = performance
+
+    def get_performance(self):
+        return self._performance
 
 
 class NoBid(BidBase):
@@ -61,8 +68,8 @@ class NoBid(BidBase):
 class Bid(BidBase):
     def __init__(self, task_id, robot_id, round_id, metrics, insertion_point, **kwargs):
         self.metrics = metrics
-        self._allocation_info = None
         self.insertion_point = insertion_point
+        self._allocation_info = None
         self.alternative_start_time = kwargs.get("alternative_start_time")
         super().__init__(task_id, robot_id, round_id)
 
