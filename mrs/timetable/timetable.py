@@ -52,6 +52,18 @@ class Timetable(STNInterface):
 
         self.logger = logging.getLogger("mrs.timetable.%s" % self.robot_id)
 
+    def __getstate__(self):
+        d = dict(self.__dict__)
+        if d.get('logger'):
+            del d['logger']
+        if d.get('lock'):
+            del d['lock']
+        return d
+
+    def __setstate__(self, d):
+        self.__dict__.update(d)
+        self.logger = logging.getLogger("mrs.timetable.%s" % self.robot_id)
+
     def update_ztp(self, time_):
         self.ztp.timestamp = time_
         self.logger.debug("Zero timepoint updated to: %s", self.ztp)
