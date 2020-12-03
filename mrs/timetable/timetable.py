@@ -267,6 +267,9 @@ class Timetable(STNInterface):
                                  "status": task.status.status,
                                  }
 
+                    if task.type == "disinfection":
+                        task_dict.update(area=task.request.area)
+
                     start_times = self.dispatchable_graph.get_times(task.task_id, "start")
 
                     # Only include tasks whose start constraints are within the given [earliest_time, latest_time]
