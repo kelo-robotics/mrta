@@ -219,7 +219,7 @@ class Timetable(STNInterface):
             self.dispatchable_graph.displace_nodes(0)
         elif len(task_node_ids) == 3:
             node_id = self.dispatchable_graph.get_task_position(task_id)
-            self.dispatchable_graph.remove_task(node_id)
+            archived_dispatchable_graph = self.dispatchable_graph.remove_task(node_id, archived_dispatchable_graph)
         else:
             self.logger.warning("Task %s is not in timetable", task_id)
         return archived_dispatchable_graph
@@ -270,27 +270,28 @@ class Timetable(STNInterface):
                     if task.type == "disinfection":
                         task_dict.update(area=task.request.area)
 
-                    start_times = self.dispatchable_graph.get_times(task.task_id, "start")
+                    start_times, is_executed = self.dispatchable_graph.get_times(task.task_id, "start")
 
                     # Only include tasks whose start constraints are within the given [earliest_time, latest_time]
                     if not start_times:
-                        start_times = other.dispatchable_graph.get_times(task.task_id, "start")
-                    start = self.get_timepoint_dict(start_times)
+                        start_times, is_executed = other.dispatchable_graph.get_times(task.task_id, "start")
+                    start = self.get_timepoint_dict(start_times, is_executed)
                     if earliest_time and latest_time and not self.time_is_within_tw(start, earliest_time, latest_time):
                         continue
                     task_dict.update(start=start)
 
-                    departure_times = self.dispatchable_graph.get_times(task.task_id, "departure")
-                    finish_times = self.dispatchable_graph.get_times(task.task_id, "finish")
+                    departure_times, is_executed = self.dispatchable_graph.get_times(task.task_id, "departure")
 
                     if not departure_times:
-                        departure_times = other.dispatchable_graph.get_times(task.task_id, "departure")
-                    departure = self.get_timepoint_dict(departure_times)
+                        departure_times, is_executed = other.dispatchable_graph.get_times(task.task_id, "departure")
+                    departure = self.get_timepoint_dict(departure_times, is_executed)
                     task_dict.update(departure=departure)
 
+                    finish_times, is_executed = self.dispatchable_graph.get_times(task.task_id, "finish")
+
                     if not finish_times:
-                        finish_times = other.dispatchable_graph.get_times(task.task_id, "finish")
-                    finish = self.get_timepoint_dict(finish_times)
+                        finish_times, is_executed = other.dispatchable_graph.get_times(task.task_id, "finish")
+                    finish = self.get_timepoint_dict(finish_times, is_executed)
                     task_dict.update(finish=finish)
 
                     tasks.append(task_dict)
@@ -298,9 +299,10 @@ class Timetable(STNInterface):
 
         return tasks, task_ids
 
-    def get_timepoint_dict(self, times_):
+    def get_timepoint_dict(self, times_, is_executed):
         return {"earliest": TimeStamp.to_str(to_timestamp(self.ztp, times_[0])),
-                "latest": TimeStamp.to_str(to_timestamp(self.ztp, times_[1]))
+                "latest": TimeStamp.to_str(to_timestamp(self.ztp, times_[1])),
+                "executed": is_executed
                 }
 
     @staticmethod
