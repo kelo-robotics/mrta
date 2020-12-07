@@ -48,7 +48,9 @@ class Timetable(STNInterface):
         self.stn = self.stp_solver.get_stn()
         self.dispatchable_graph = self.stp_solver.get_stn()
         super().__init__(self.ztp, self.stn, self.dispatchable_graph)
-        self.lock = threading.RLock()
+        add_lock = kwargs.get("add_lock", False)
+        if add_lock:
+            self.lock = threading.Lock()
 
         self.logger = logging.getLogger("mrs.timetable.%s" % self.robot_id)
 
@@ -185,6 +187,7 @@ class Timetable(STNInterface):
 
     def check_is_task_delayed(self, task, assigned_time, node_id):
         latest_time = self.dispatchable_graph.get_node_latest_time(node_id)
+        self.logger.debug("assigned time: %s, latest time: %s", assigned_time, latest_time)
         if assigned_time > latest_time:
             self.logger.warning("Task %s is delayed", task.task_id)
             task.delayed = True
@@ -416,7 +419,7 @@ class TimetableManager:
         return self.archived_timetables.get(robot_id)
 
     def fetch_timetable(self, robot_id):
-        timetable = Timetable(robot_id, self.stp_solver, simulator=self.simulator)
+        timetable = Timetable(robot_id, self.stp_solver, simulator=self.simulator, add_lock=True)
         timetable.logger = logging.getLogger("mrs.timetable.%s" % robot_id)
         timetable.logger.addFilter(ContextFilter())
         timetable.fetch()
