@@ -264,11 +264,11 @@ class Timetable(STNInterface):
                         continue
 
                     task_dict = {"task_id": str(task.task_id),
-                                 "type": task.type,
+                                 "type": task.task_type,
                                  "status": task.status.status,
                                  }
 
-                    if task.type == "disinfection":
+                    if task.task_type == "DisinfectionTask":
                         task_dict.update(area=task.request.area)
 
                     start_times, is_executed = self.dispatchable_graph.get_times(task.task_id, "start")
