@@ -280,7 +280,7 @@ class Timetable(STNInterface):
                     if not start_times:
                         start_times, is_executed = other.dispatchable_graph.get_times(task.task_id, "start")
                     start = self.get_timepoint_dict(start_times, is_executed)
-                    if earliest_time and latest_time and not self.time_is_within_tw(start, earliest_time, latest_time):
+                    if not self.time_is_within_tw(start, earliest_time, latest_time):
                         continue
                     task_dict.update(start=start)
 
@@ -310,9 +310,21 @@ class Timetable(STNInterface):
                 }
 
     @staticmethod
-    def time_is_within_tw(timepoint_dict, earliest_time, latest_time):
-        if TimeStamp.from_str(timepoint_dict["earliest"]) >= earliest_time and\
-                TimeStamp.from_str(timepoint_dict["latest"]) <= latest_time:
+    def time_is_within_tw(start , earliest_time, latest_time):
+        after_lower_bound = False
+        below_upper_bound = False
+        if earliest_time and TimeStamp.from_str(start["earliest"]) >= earliest_time:
+            after_lower_bound = True
+        if latest_time and TimeStamp.from_str(start["latest"]) <= latest_time:
+            below_upper_bound = True
+
+        if not earliest_time and not latest_time:   # No boundaries defined
+            return True
+        if earliest_time and not latest_time and after_lower_bound:
+            return True
+        elif latest_time and not earliest_time and below_upper_bound:
+            return True
+        elif earliest_time and latest_time and after_lower_bound and below_upper_bound:
             return True
         return False
 
