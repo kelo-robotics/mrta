@@ -268,6 +268,9 @@ class Timetable(STNInterface):
                                  "status": task.status.status,
                                  }
 
+                    if task.is_recurrent():
+                        task_dict.update(event_uid=task.request.event.uid)
+
                     if task.task_type == "DisinfectionTask":
                         task_dict.update(area=task.request.area)
 
