@@ -158,8 +158,8 @@ class Timetable(STNInterface):
             return True
         return False
 
-    def get_earliest_task_id(self):
-        return self.stn.get_earliest_task_id()
+    def get_earliest_task_id(self, node_type=None):
+        return self.stn.get_earliest_task_id(node_type)
 
     def get_r_time(self, task_id, node_type, lower_bound):
         r_time = self.dispatchable_graph.get_time(task_id, node_type, lower_bound)
