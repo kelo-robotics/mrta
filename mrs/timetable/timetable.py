@@ -3,6 +3,7 @@ import logging
 import threading
 from datetime import timedelta
 
+import dateutil.parser
 from fmlib.models.tasks import Task
 from fmlib.models.tasks import TaskStatus
 from fmlib.models.tasks import TimepointConstraint
@@ -310,12 +311,12 @@ class Timetable(STNInterface):
                 }
 
     @staticmethod
-    def time_is_within_tw(start , earliest_time, latest_time):
+    def time_is_within_tw(timepoint , earliest_time=None, latest_time=None):
         after_lower_bound = False
         below_upper_bound = False
-        if earliest_time and TimeStamp.from_str(start["earliest"]) >= earliest_time:
+        if earliest_time and TimeStamp.from_str(timepoint["earliest"]) >= earliest_time:
             after_lower_bound = True
-        if latest_time and TimeStamp.from_str(start["latest"]) <= latest_time:
+        if latest_time and TimeStamp.from_str(timepoint["latest"]) <= latest_time:
             below_upper_bound = True
 
         if not earliest_time and not latest_time:   # No boundaries defined
@@ -327,6 +328,40 @@ class Timetable(STNInterface):
         elif earliest_time and latest_time and after_lower_bound and below_upper_bound:
             return True
         return False
+
+    def get_blocked_timeslots(self, other, earliest_time, latest_time):
+        task_ids = list()
+        timeslots = list()
+
+        for i in sorted(self.dispatchable_graph.nodes()):
+            if 'data' in self.dispatchable_graph.nodes[i]:
+                node_data = self.dispatchable_graph.nodes[i]['data']
+                if node_data.task_id not in task_ids \
+                        and node_data.node_type != 'zero_timepoint':
+
+                    departure_times, is_executed = self.dispatchable_graph.get_times(node_data.task_id, "departure")
+                    if not departure_times:
+                        departure_times, is_executed = other.dispatchable_graph.get_times(node_data.task_id, "departure")
+
+                    departure = self.get_timepoint_dict(departure_times, is_executed)
+                    if not self.time_is_within_tw(departure, earliest_time=earliest_time):
+                        continue
+
+                    finish_times, is_executed = self.dispatchable_graph.get_times(node_data.task_id, "finish")
+                    if not finish_times:
+                        finish_times, is_executed = other.dispatchable_graph.get_times(node_data.task_id, "finish")
+
+                    finish = self.get_timepoint_dict(finish_times, is_executed)
+                    if not self.time_is_within_tw(finish, earliest_time=None, latest_time=latest_time):
+                        continue
+
+                    # Earliest departure and latest finish times are within [earliest_time, latest_time]
+                    timeslot = TimepointConstraint(dateutil.parser.parse(departure["earliest"]),
+                                                   dateutil.parser.parse(finish["latest"]))
+                    timeslots.append(timeslot.to_str())
+                    task_ids.append(node_data.task_id)
+
+        return timeslots
 
     def to_dict(self):
         timetable_dict = dict()
@@ -480,6 +515,17 @@ class TimetableManager:
             timetables.append({"robot_id": robot_id, "tasks": tasks})
 
         return timetables
+
+    def get_blocked_timeslot_reply(self, robot_ids, earliest_time, latest_time):
+        timeslots = dict()
+        for robot_id in robot_ids:
+            timetable = self.get_timetable(robot_id)
+            archived_timetable = self.get_archived_timetable(robot_id)
+
+            timeslots_per_robot = timetable.get_blocked_timeslots(archived_timetable, earliest_time, latest_time)
+            timeslots[str(robot_id)] = timeslots_per_robot
+
+        return timeslots
 
     def update_timetable(self, winning_bid, allocation_info, task):
         timetable = self.timetables.get(winning_bid.robot_id)
