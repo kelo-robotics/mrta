@@ -49,9 +49,9 @@ class RecoveryMethod:
             remaining_actions = task.plan[0].actions[action_idx:]
 
         for action in remaining_actions:
-            if action.duration:
-                mean += action.duration.mean
-                variance += action.duration.variance
+            if action.estimated_duration:
+                mean += action.estimated_duration.mean
+                variance += action.estimated_duration.variance
 
         estimated_duration = mean + 2 * round(variance ** 0.5, 3)
         self.logger.debug("Remaining estimated task duration: %s ", estimated_duration)

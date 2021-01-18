@@ -2,7 +2,7 @@ import copy
 import logging
 import time
 
-from fmlib.models.actions import Duration
+from fmlib.models.actions import EstimatedDuration
 from fmlib.models.performance import BidPerformance, TaskPerformance
 from mrs.allocation.bidding_rule import bidding_rule_factory
 from mrs.allocation.round import RoundBidder
@@ -317,7 +317,7 @@ class Bidder:
             self.logger.warning("No planner configured")
             mean = 1
             variance = 0.1
-        travel_time = Duration(mean=mean, variance=variance)
+        travel_time = EstimatedDuration(mean=mean, variance=variance)
         self.logger.debug("Travel duration: %s", travel_time)
         return travel_time
 
