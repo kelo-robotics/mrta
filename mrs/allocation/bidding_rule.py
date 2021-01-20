@@ -33,7 +33,7 @@ class BiddingRuleBase:
             dispatchable_graph = self.timetable.compute_dispatchable_graph(stn)
             metrics = self.compute_metrics(dispatchable_graph, allocation_info=allocation_info)
 
-            if task.constraints.hard:
+            if not task.alternative_timeslot:
                 bid = Bid(task.task_id,
                           robot_id,
                           round_id,

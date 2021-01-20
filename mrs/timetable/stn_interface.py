@@ -63,7 +63,7 @@ class STNInterface:
     def update_stn_task(self, stn_task, travel_time, task, insertion_point):
         travel_edge = Edge(name="travel_time", mean=travel_time.mean, variance=travel_time.variance)
 
-        if task.hard_constraints:
+        if not task.alternative_timeslot:
             start_timepoint = stn_task.get_timepoint("start")
         else:
             start_timepoint = self.get_start_timepoint(task, travel_edge, insertion_point)
@@ -90,7 +90,7 @@ class STNInterface:
         r_earliest_start_time = relative_to_ztp(self.ztp, task.start_constraint.earliest_time)
         r_latest_start_time = relative_to_ztp(self.ztp, task.start_constraint.latest_time)
 
-        if not task.hard_constraints:
+        if task.alternative_timeslot:
             start_time_window = task.start_constraint.latest_time - task.start_constraint.earliest_time
 
             if insertion_point == 1:
