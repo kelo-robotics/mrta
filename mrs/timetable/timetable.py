@@ -265,6 +265,7 @@ class Timetable(STNInterface):
                         continue
 
                     task_dict = {"task_id": str(task.task_id),
+                                 "request_id": str(task.request.request_id),
                                  "type": task.task_type,
                                  "status": task.status.status,
                                  }
