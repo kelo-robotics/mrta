@@ -8,6 +8,8 @@ from fmlib.models.tasks import Task
 from fmlib.models.tasks import TaskStatus
 from fmlib.models.tasks import TimepointConstraint
 from fmlib.models.timetable import Timetable as TimetableMongo
+from fmlib.utils.messages import Message
+from fmlib.utils.messages import MessageFactory
 from mrs.exceptions.allocation import InvalidAllocation
 from mrs.exceptions.allocation import TaskNotFound
 from mrs.exceptions.execution import InconsistentAssignment
@@ -445,6 +447,7 @@ class TimetableManager:
         self.logger.addFilter(ContextFilter())
         self.stp_solver = stp_solver
         self.simulator = kwargs.get('simulator')
+        self.mf = MessageFactory()
 
         self.logger.debug("TimetableManager started")
 
@@ -527,6 +530,26 @@ class TimetableManager:
             timeslots[str(robot_id)] = timeslots_per_robot
 
         return timeslots
+
+    def send_timetable_update(self, robot_id, api):
+        timetable = self.get_timetable(robot_id)
+        archived_timetable = self.get_archived_timetable(timetable.robot_id)
+        tasks = list()
+        task_ids = list()
+
+        archived_tasks, task_ids = archived_timetable.get_tasks_for_timetable_update(timetable,
+                                                                                     task_ids=task_ids,
+                                                                                     status=TaskStatus.archived_status)
+        tasks.extend(archived_tasks)
+        not_archived_tasks, task_ids = timetable.get_tasks_for_timetable_update(archived_timetable,
+                                                                                task_ids=task_ids,
+                                                                                status=TaskStatus.in_timetable)
+        tasks.extend(not_archived_tasks)
+
+        header = self.mf.create_header("timetable-update")
+        payload = self.mf.create_payload_from_dict({"robot_id": robot_id, "tasks": tasks})
+        msg = Message(payload, header)
+        api.publish(msg, groups=["ROPOD"])
 
     def update_timetable(self, winning_bid, allocation_info, task):
         timetable = self.timetables.get(winning_bid.robot_id)

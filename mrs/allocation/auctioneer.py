@@ -179,9 +179,8 @@ class Auctioneer(SimulatorInterface):
         self.allocations.append(allocation)
         task_performance = TaskPerformance.get_task(self.winning_bid.task_id)
         task_performance.update_allocation(self.round.id, self.round.time_to_allocate, list(self.round.tasks.keys()))
-        robot_performance = RobotPerformance.get_robot(self.winning_bid.robot_id, api=self.api)
-        archived_timetable = self.timetable_manager.get_archived_timetable(timetable.robot_id)
-        robot_performance.update_timetables(timetable, archived_timetable)
+        robot_performance = RobotPerformance.get_robot(self.winning_bid.robot_id)
+        robot_performance.update_timetables(timetable)
         self.finish_round()
 
     def undo_allocation(self, allocation_info):
