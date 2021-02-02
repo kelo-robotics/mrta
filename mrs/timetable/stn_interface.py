@@ -105,7 +105,7 @@ class STNInterface:
             latest_start_time = earliest_start_time + start_time_window
             r_latest_start_time = relative_to_ztp(self.ztp, latest_start_time)
 
-            task.update_start_constraint(earliest_start_time, latest_start_time)
+            task.update_alternative_start_time(earliest_start_time, latest_start_time)
 
         start_timepoint = Timepoint(name="start", r_earliest_time=r_earliest_start_time,
                                     r_latest_time=r_latest_start_time)
