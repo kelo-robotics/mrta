@@ -33,6 +33,5 @@ class InvalidAllocation(Exception):
 
 
 class TaskNotFound(Exception):
-    def __init__(self, position):
+    def __init__(self):
         """ Raised when attempting to read a task in a timetable position that does not exist"""
-        self.position = position
