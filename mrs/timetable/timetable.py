@@ -135,7 +135,7 @@ class Timetable(STNInterface):
         if task_id:
             return task_id
         else:
-            raise TaskNotFound(position)
+            raise TaskNotFound
 
     def get_task_node_ids(self, task_id):
         return self.stn.get_task_node_ids(task_id)
@@ -388,7 +388,7 @@ class Timetable(STNInterface):
         timetable.ztp = TimeStamp.from_str(ztp)
         timetable.stn = stn_cls.from_dict(timetable_dict['stn'])
         timetable.dispatchable_graph = stn_cls.from_dict(timetable_dict['dispatchable_graph'])
-        timetable.stn_tasks = timetable_dict['stn_tasks']
+        timetable.stn_tasks = {task_id: STNTask.from_dict(task) for (task_id, task) in timetable_dict['stn_tasks'].items()}
 
         return timetable
 
