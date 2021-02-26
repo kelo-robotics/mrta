@@ -71,6 +71,7 @@ class Bid(BidBase):
         self.insertion_point = insertion_point
         self._allocation_info = None
         self.alternative_start_time = kwargs.get("alternative_start_time")
+        self.tasks_to_remove = kwargs.get("tasks_to_remove", list())
         super().__init__(task_id, robot_id, round_id)
 
     def __str__(self):
@@ -79,8 +80,9 @@ class Bid(BidBase):
         to_print += " insertion_point: {}".format(self.insertion_point)
         if self.alternative_start_time:
             to_print += " alternative_start_time: {}".format(self.alternative_start_time)
-        else:
-            to_print += ")"
+        if self.tasks_to_remove:
+            to_print += " tasks to remove: {}".format(self.tasks_to_remove)
+        to_print += ")"
         return to_print
 
     def __lt__(self, other):
