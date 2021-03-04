@@ -6,6 +6,7 @@ from datetime import timedelta
 import dateutil.parser
 from fmlib.models.tasks import Task
 from fmlib.models.tasks import TaskStatus
+from ropod.structs.status import TaskStatus as TaskStatusConst
 from fmlib.models.tasks import TimepointConstraint
 from fmlib.models.timetable import Timetable as TimetableMongo
 from fmlib.utils.messages import Message
@@ -267,10 +268,12 @@ class Timetable(STNInterface):
                         continue
 
                     task_dict = {"task_id": str(task.task_id),
-                                 "request_id": str(task.request.request_id),
                                  "type": task.task_type,
                                  "status": task.status.status,
                                  }
+
+                    if task.request and task.request.request_id:
+                        task_dict.update(request_id=str(task.request.request_id))
 
                     if task.is_recurrent():
                         task_dict.update(event_uid=task.request.event.uid)
@@ -539,7 +542,7 @@ class TimetableManager:
 
         archived_tasks, task_ids = archived_timetable.get_tasks_for_timetable_update(timetable,
                                                                                      task_ids=task_ids,
-                                                                                     status=TaskStatus.archived_status)
+                                                                                     status=[TaskStatusConst.ONGOING])
         tasks.extend(archived_tasks)
         not_archived_tasks, task_ids = timetable.get_tasks_for_timetable_update(archived_timetable,
                                                                                 task_ids=task_ids,
