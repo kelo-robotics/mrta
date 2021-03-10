@@ -278,6 +278,9 @@ class Timetable(STNInterface):
                     if task.is_recurrent():
                         task_dict.update(event_uid=task.request.event.uid)
 
+                    if task.is_repetitive():
+                        task_dict.update(repetition_pattern=task.request.repetition_pattern.to_dict())
+
                     if task.task_type == "DisinfectionTask":
                         task_dict.update(area=task.request.area)
 
