@@ -8,6 +8,10 @@ def relative_to_ztp(ztp, time_, resolution="seconds"):
         r_time = float('inf')
     else:
         r_time = TimeStamp.from_datetime(time_).get_difference(ztp, resolution)
+    if r_time < 0:
+        # The relative time cannot be a time in the past (tasks should not be allocated to start in the past)
+        # The earliest valid relative time is now
+        r_time = TimeStamp().get_difference(ztp, resolution)
     return r_time
 
 
