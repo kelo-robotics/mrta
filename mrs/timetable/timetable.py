@@ -169,6 +169,11 @@ class Timetable(STNInterface):
         r_time = self.dispatchable_graph.get_time(task_id, node_type, lower_bound)
         return r_time
 
+    def get_earliest_time(self):
+        r_earliest_time = self.dispatchable_graph.get_earliest_time()
+        earliest_time = self.ztp + timedelta(seconds=r_earliest_time)
+        return earliest_time
+
     def get_departure_time(self, task_id, lower_bound=True):
         r_departure_time = self.get_r_time(task_id, 'departure', lower_bound)
         departure_time = self.ztp + timedelta(seconds=r_departure_time)
