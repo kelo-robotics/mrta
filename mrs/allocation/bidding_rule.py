@@ -25,8 +25,9 @@ class BiddingRuleBase:
         self.timetable = timetable
 
     def compute_metrics(self, dispatchable_graph, **kwargs):
-        temporal_metric = dispatchable_graph.compute_temporal_metric(self.temporal_criterion)
-        return Metrics(temporal_metric)
+        objective = dispatchable_graph.compute_temporal_metric(self.temporal_criterion)
+        earliest_time = dispatchable_graph.get_earliest_time()
+        return Metrics(objective, earliest_time, dispatchable_graph.risk_metric)
 
     def compute_bid(self, stn, robot_id, round_id, task, insertion_point, allocation_info):
         try:
@@ -87,8 +88,9 @@ class Duration(BiddingRuleBase):
 
         # Dual objective (like TeSSIduo)
         objective = self.alpha * temporal_metric + (1 - self.alpha) * increment_in_duration
+        earliest_time = dispatchable_graph.get_earliest_time()
 
-        return Metrics(objective, dispatchable_graph.risk_metric)
+        return Metrics(objective, earliest_time, dispatchable_graph.risk_metric)
 
 
 class CompletionTimeRisk(BiddingRuleBase):
@@ -96,8 +98,9 @@ class CompletionTimeRisk(BiddingRuleBase):
         super().__init__("completion_time", timetable)
 
     def compute_metrics(self, dispatchable_graph, **kwargs):
-        temporal_metric = dispatchable_graph.compute_temporal_metric(self.temporal_criterion)
-        return Metrics(temporal_metric, dispatchable_graph.risk_metric)
+        objective = dispatchable_graph.compute_temporal_metric(self.temporal_criterion)
+        earliest_time = dispatchable_graph.get_earliest_time()
+        return Metrics(objective, earliest_time, dispatchable_graph.risk_metric)
 
 
 class CompletionTime(BiddingRuleBase):
