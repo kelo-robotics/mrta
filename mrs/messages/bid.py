@@ -4,24 +4,24 @@ from stn.task import Task as STNTask
 
 class Metrics(AsDictMixin):
 
-    def __init__(self, objective, risk=1):
+    def __init__(self, objective, earliest_time, risk=1):
         self.objective = objective
+        self.earliest_time = earliest_time
         self.risk = risk
 
     def __str__(self):
-        to_print = ""
-        to_print += "(objective: {}, risk: {})".format(self.objective, self.risk)
-        return to_print
+        return f"(objective: {self.objective}, earliest_time: {self.earliest_time}, risk: {self.risk})"
 
     def __lt__(self, other):
         if other is None:
             return False
-        return self.risk < other.risk or (self.risk == other.risk and self.objective < other.objective)
+        return self.risk < other.risk or (self.risk == other.risk and self.objective < other.objective) or\
+               (self.risk == other.risk and self.objective == other.objective and self.earliest_time < other.earliest_time)
 
     def __eq__(self, other):
         if other is None:
             return False
-        return self.risk == other.risk and self.objective == other.objective
+        return self.risk == other.risk and self.objective == other.objective and self.earliest_time == other.earliest_time
 
     @classmethod
     def from_dict(cls, dict_repr):
